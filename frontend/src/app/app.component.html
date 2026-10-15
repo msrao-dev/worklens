@@ -1,0 +1,187 @@
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="rail" [class.open]="railOpen">
+    <div class="brand">
+      <svg class="lens" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+        <circle cx="16" cy="16" r="13" stroke="var(--brand)" stroke-width="2.3" />
+        <circle cx="16" cy="16" r="6.4" fill="var(--brand)" />
+        <circle cx="13.4" cy="13.4" r="1.9" fill="#fff" opacity=".9" />
+        <path d="M25.2 25.2 L30 30" stroke="var(--brand)" stroke-width="2.6" stroke-linecap="round" />
+      </svg>
+      <div class="brand-name">Work<span>Lens</span></div>
+      <div class="tagline">Find it. Fast.</div>
+    </div>
+    <div class="rail-scroll">
+      <div class="rail-label">Suggested questions</div>
+      <div class="suggest">
+        <button *ngFor="let q of suggest; trackBy: trackByIndex" (click)="ask(q)">{{ q }}</button>
+      </div>
+      <div class="rail-label">My shortcuts</div>
+      <div class="shortcuts">
+        <button class="chip" *ngFor="let s of shortcuts; trackBy: trackByIndex" (click)="ask(s.q)">
+          <span [innerHTML]="s.icon | safeHtml"></span><span>{{ s.label }}</span>
+        </button>
+      </div>
+    </div>
+    <div class="rail-foot">
+      <div class="idx"><b>12</b> documents indexed<br />HR · IT · Facilities · Finance</div>
+      <button class="icon-btn" (click)="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
+        <svg *ngIf="dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
+        <svg *ngIf="!dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+      </button>
+    </div>
+  </aside>
+  <div class="scrim" [class.show]="railOpen" (click)="railOpen = false"></div>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <button class="icon-btn hamburger" (click)="railOpen = true" aria-label="Open menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+      <div class="top-title">Knowledge Assistant</div>
+      <span class="demo-badge">Demo · sample data</span>
+      <div class="ctx"><span class="dot"></span>Signed in as <b>Meera S.</b> · Bengaluru · Engineering</div>
+    </div>
+
+    <div class="stream" #stream>
+      <div class="thread">
+        <div class="welcome">
+          <h1>What can I help you find?</h1>
+          <p>Ask anything about HR, IT, benefits, facilities or onboarding. WorkLens answers from your company’s own approved documents and shows you exactly where each answer comes from.</p>
+        </div>
+
+        <ng-container *ngFor="let m of messages; trackBy: trackByIndex">
+          <!-- User message -->
+          <div class="msg user" *ngIf="m.role === 'user'">
+            <div class="avatar me">MS</div>
+            <div class="bubble">{{ m.text }}</div>
+          </div>
+
+          <!-- Bot message -->
+          <div class="msg bot" *ngIf="m.role === 'bot'">
+            <div class="avatar bot">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="#fff" stroke-width="2"/><circle cx="12" cy="12" r="4" fill="#fff"/><circle cx="10.2" cy="10.2" r="1.2" fill="var(--brand)"/></svg>
+            </div>
+            <div class="bubble">
+              <!-- Typing -->
+              <div class="typing" *ngIf="m.typing"><i></i><i></i><i></i></div>
+
+              <!-- Answer -->
+              <ng-container *ngIf="m.entry as e">
+                <div class="ctx-line">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
+                  Answered for Engineering · Bengaluru
+                </div>
+                <div class="answer" [innerHTML]="e.answer | safeHtml"></div>
+
+                <div class="sources">
+                  <div class="sources-h">Sources · {{ e.sources.length }}</div>
+                  <button class="src" *ngFor="let s of e.sources; trackBy: trackByIndex" (click)="openDoc(s)">
+                    <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    <div class="src-body">
+                      <div class="src-title">{{ s.title }}</div>
+                      <div class="src-meta">
+                        <span>{{ s.section }}</span>
+                        <span class="fresh" [class.stale]="isStale(s.updated)">
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                          updated {{ s.updated }}<span *ngIf="isStale(s.updated)"> · verify</span>
+                        </span>
+                      </div>
+                    </div>
+                    <span class="src-open">View →</span>
+                  </button>
+                </div>
+
+                <div class="meta">
+                  <div class="conf" [class.high]="e.conf === 'high'" [class.med]="e.conf !== 'high'">
+                    <span class="bars"><i></i><i></i><i></i></span>
+                    <span><b>{{ e.conf === 'high' ? 'High' : 'Medium' }}</b> confidence</span>
+                  </div>
+                  <div class="acts">
+                    <button class="act up" [class.on]="m.up" title="Helpful" (click)="vote(m, true)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zM7 11l4-8a2 2 0 0 1 2 2v3h5a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/></svg>
+                    </button>
+                    <button class="act down" [class.on]="m.down" title="Not helpful" (click)="vote(m, false)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1zM17 13l-4 8a2 2 0 0 1-2-2v-3H6a2 2 0 0 1-2-2.3l1.2-6A2 2 0 0 1 7.2 4H17"/></svg>
+                    </button>
+                    <button class="act copy" title="Copy answer" (click)="copy(m)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+                    </button>
+                  </div>
+                </div>
+
+                <div style="margin-top:8px" *ngIf="e.conf !== 'high'">
+                  <button class="ask-human" (click)="askHuman()">This is a general answer — ask a human to confirm your case</button>
+                </div>
+              </ng-container>
+
+              <!-- Fallback / honest "I don't know" -->
+              <ng-container *ngIf="m.fallback">
+                <div class="answer">
+                  <p>I couldn’t find a confident answer to that in the approved company documents, so I’d rather not guess.</p>
+                  <p>You can try rephrasing, or I can point you to someone who’ll know.</p>
+                </div>
+                <div class="meta">
+                  <div class="acts" style="margin-left:0">
+                    <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman()">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="width:14px;height:14px"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
+                      Route this to the right team
+                    </button>
+                  </div>
+                </div>
+                <div class="gap-note">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
+                  <span>Logged as a <strong>knowledge gap</strong> — if several people ask this, the admin dashboard flags it so the missing document can be added.</span>
+                </div>
+              </ng-container>
+            </div>
+          </div>
+        </ng-container>
+      </div>
+    </div>
+
+    <div class="composer-wrap">
+      <form class="composer" (ngSubmit)="send()">
+        <textarea
+          [(ngModel)]="input"
+          name="q"
+          rows="1"
+          placeholder="Ask about leave, IT, benefits, onboarding…"
+          autocomplete="off"
+          (keydown)="onKey($event)"></textarea>
+        <button class="send" type="submit" [disabled]="!input.trim()" aria-label="Send">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+        </button>
+      </form>
+      <div class="hint">WorkLens answers only from approved company documents — and tells you when it can’t.</div>
+    </div>
+  </main>
+</div>
+
+<!-- Source modal -->
+<div class="overlay" [class.show]="selectedSource" (click)="closeDoc()">
+  <div class="doc-card" *ngIf="selectedSource as s" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+    <div class="doc-head">
+      <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+      <div>
+        <div class="t">{{ s.title }}</div>
+        <div class="s"><span>{{ s.section }}</span><span>Updated {{ s.updated }}</span></div>
+      </div>
+      <button class="icon-btn doc-close" (click)="closeDoc()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="doc-body"><div class="passage" [innerHTML]="s.passage | safeHtml"></div></div>
+    <div class="doc-foot">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>
+      <span>{{ isStale(s.updated) ? 'This source is over a year old — verify it’s still current.' : 'Highlighted text is the exact passage this answer was drawn from.' }}</span>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" [class.show]="toastShow">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
+  <span>{{ toastMsg }}</span>
+</div>
