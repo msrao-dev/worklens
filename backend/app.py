@@ -3,7 +3,7 @@ from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.ingest import extract_text
-from backend.rag import store_chunks, ask_question
+from backend.rag import store_chunks, ask_question, reset_collection
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 app = FastAPI()
@@ -61,3 +61,8 @@ async def ingest(file: UploadFile = File(...)):
 @app.post("/query")
 async def query(body: dict):
     return ask_question(body["question"])
+
+@app.post("/reset")
+async def reset():
+    reset_collection()
+    return {"status": "success"}

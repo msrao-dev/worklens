@@ -79,3 +79,8 @@ Question:
         "sources":
         docs
     }
+
+def reset_collection():
+    global collection
+    client.delete_collection("employee_docs")
+    collection = client.get_or_create_collection("employee_docs")
