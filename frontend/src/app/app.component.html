@@ -83,7 +83,16 @@
             </div>
             <div class="bubble">
               <!-- Typing -->
-              <div class="typing" *ngIf="m.typing"><i></i><i></i><i></i></div>
+              <div class="typing-row" *ngIf="m.typing">
+                <div class="typing"><i></i><i></i><i></i></div>
+                <span class="typing-status" *ngIf="m.status">{{ m.status }}</span>
+              </div>
+
+              <!-- Text read from an attached image -->
+              <div class="from-image" *ngIf="m.imageText">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></svg>
+                <span>Read from your image: “{{ m.imageText.length > 140 ? m.imageText.slice(0, 140) + '…' : m.imageText }}”</span>
+              </div>
 
               <!-- Answer -->
               <ng-container *ngIf="m.entry as e">
@@ -118,8 +127,11 @@
                   </div>
                   <div class="acts">
                     <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
-                    <button class="act copy" title="Copy answer" (click)="copy(m)">
+                    <button class="act copy" title="Copy answer with sources" (click)="copy(m)">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
+                    </button>
+                    <button class="act" title="Download as PDF" (click)="downloadPdf(m)">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
                     </button>
                   </div>
                 </div>
@@ -127,13 +139,14 @@
                 <div style="margin-top:8px" *ngIf="e.conf !== 'high'">
                   <button class="ask-human" (click)="askHuman()">This is a general answer — ask a human to confirm your case</button>
                 </div>
+
+                <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
               </ng-container>
 
               <!-- Fallback / honest "I don't know" -->
               <ng-container *ngIf="m.fallback">
                 <div class="answer">
-                  <p>I couldn’t find a confident answer to that in the approved company documents, so I’d rather not guess.</p>
-                  <p>You can try rephrasing, or I can point you to someone who’ll know.</p>
+                  <p *ngFor="let p of fallbackParas; trackBy: trackByIndex">{{ p }}</p>
                 </div>
                 <div class="meta">
                   <div class="acts" style="margin-left:0">
@@ -150,6 +163,7 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
                   <span>Logged as a <strong>knowledge gap</strong> — if several people ask this, the admin dashboard flags it so the missing document can be added.</span>
                 </div>
+                <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
               </ng-container>
 
               <!-- Plain note, e.g. upload acknowledgement -->
@@ -179,7 +193,7 @@
             </button>
           </span>
         </div>
-        <button type="button" class="attach" (click)="fileInput.click()" title="Attach image or file" aria-label="Attach image or file">
+        <button type="button" class="attach" (click)="fileInput.click()" title="Attach a screenshot or image to ask about it" aria-label="Attach image or file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
         <input #fileInput type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
@@ -205,6 +219,16 @@
     <svg *ngIf="speaking !== m" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
     <svg *ngIf="speaking === m" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
   </button>
+</ng-template>
+
+<!-- Follow-up questions under a reply -->
+<ng-template #followupsTpl let-m>
+  <div class="followups" *ngIf="m.followups?.length">
+    <div class="followups-h">{{ m.fallback ? 'Try asking' : 'Related questions' }}</div>
+    <div class="followups-list">
+      <button class="followup" *ngFor="let f of m.followups; trackBy: trackByIndex" (click)="ask(f)">{{ f }}</button>
+    </div>
+  </div>
 </ng-template>
 
 <!-- Source modal -->

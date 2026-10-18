@@ -2,12 +2,13 @@ import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone }
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SafeHtmlPipe } from './safe-html.pipe';
-import { KB, SHORTCUTS, KBEntry, Source, Shortcut } from './worklens.data';
+import { KB, SHORTCUTS, QUESTIONS, RELATED, POPULAR, KBEntry, Source, Shortcut } from './worklens.data';
 
 interface Attachment {
   name: string;
   /** Object URL for image previews; undefined for other files. */
   url?: string;
+  file?: File;
 }
 
 interface Msg {
@@ -19,11 +20,22 @@ interface Msg {
   /** Plain bot reply, e.g. acknowledging an upload. */
   note?: string;
   typing?: boolean;
+  /** Shown beside the typing dots, e.g. while reading an image. */
+  status?: string;
+  /** The question this reply answers (used in the PDF). */
+  q?: string;
+  /** Text read from attached images, if any. */
+  imageText?: string;
+  followups?: string[];
 }
 
-const FALLBACK_TEXT =
-  'I couldn’t find a confident answer to that in the approved company documents, so I’d rather not guess. ' +
-  'You can try rephrasing, or I can point you to someone who’ll know.';
+const FALLBACK_PARAS = [
+  'I couldn’t find this in the company documents available to me.',
+  'None of the indexed HR, IT, Facilities or Finance documents cover it closely enough to give a reliable answer, so I won’t guess. Try rephrasing, or I can route it to the right team.'
+];
+
+/** Minimum keyword score for an answer. In production this is the retrieval similarity threshold. */
+const MIN_MATCH_SCORE = 1;
 
 const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
@@ -42,6 +54,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   input = '';
   pending: Attachment[] = [];
   speaking: Msg | null = null;
+  fallbackParas = FALLBACK_PARAS;
   dark = false;
   railOpen = false;
   selectedSource: Source | null = null;
@@ -67,7 +80,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     // Seed the opening state with one worked example, so the first view
     // shows the product in action rather than an empty shell.
     this.messages.push({ role: 'user', text: 'How many leave days do I have left?' });
-    this.messages.push({ role: 'bot', entry: KB[0] });
+    this.messages.push({ role: 'bot', entry: KB[0], q: QUESTIONS[KB[0].id], followups: this.followups(KB[0].id) });
   }
 
   ngAfterViewChecked(): void {
@@ -101,7 +114,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         best = e;
       }
     }
-    return bestScore >= 1 ? best : null;
+    return bestScore >= MIN_MATCH_SCORE ? best : null;
+  }
+
+  private followups(id: string): string[] {
+    return (RELATED[id] || []).map((r) => QUESTIONS[r]);
   }
 
   ask(text: string, files: Attachment[] = []): void {
@@ -114,21 +131,60 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     this.pendingScroll = true;
     this.railOpen = false;
 
-    const e = text ? this.match(text) : null;
-    setTimeout(() => {
-      const i = this.messages.indexOf(typingMsg);
-      if (i > -1) this.messages.splice(i, 1);
-      let reply: Msg;
-      if (e) reply = { role: 'bot', entry: e };
-      else if (text) reply = { role: 'bot', fallback: true };
-      else
-        reply = {
-          role: 'bot',
-          note: `Got your ${files.length === 1 ? 'file' : files.length + ' files'}. This demo can’t read uploads yet — once the backend is connected, I’ll answer questions from them.`
-        };
-      this.messages.push(reply);
-      this.pendingScroll = true;
-    }, 650);
+    const images = files.filter((f) => f.url && f.file);
+    const started = Date.now();
+    const reading = images.length ? this.readImages(images, typingMsg) : Promise.resolve('');
+    reading.then((fromImage) => {
+      // Keep a short "typing" pause even when there was nothing to read.
+      const wait = Math.max(0, 650 - (Date.now() - started));
+      setTimeout(() => this.reply(typingMsg, text, files, images.length > 0, fromImage), wait);
+    });
+  }
+
+  private reply(typingMsg: Msg, text: string, files: Attachment[], hadImages: boolean, fromImage: string): void {
+    const i = this.messages.indexOf(typingMsg);
+    if (i > -1) this.messages.splice(i, 1);
+
+    const query = [text, fromImage].filter(Boolean).join(' ');
+    const e = query ? this.match(query) : null;
+    const imageText = fromImage || undefined;
+    let reply: Msg;
+    if (e) {
+      reply = { role: 'bot', entry: e, q: text || QUESTIONS[e.id], imageText, followups: this.followups(e.id) };
+    } else if (query) {
+      reply = { role: 'bot', fallback: true, q: text, imageText, followups: POPULAR.map((id) => QUESTIONS[id]) };
+    } else if (hadImages) {
+      reply = { role: 'bot', note: 'I couldn’t find any readable text in that image. Try a clearer screenshot, or type your question.' };
+    } else {
+      reply = {
+        role: 'bot',
+        note: `Got your ${files.length === 1 ? 'file' : files.length + ' files'}. I can read text from images, but other files aren’t supported yet.`
+      };
+    }
+    this.messages.push(reply);
+    this.pendingScroll = true;
+  }
+
+  /** OCR in the browser; tesseract.js fetches its engine and language data on first use. */
+  private async readImages(images: Attachment[], typingMsg: Msg): Promise<string> {
+    typingMsg.status = images.length > 1 ? 'Reading your images…' : 'Reading your image…';
+    try {
+      const { createWorker } = await import('tesseract.js');
+      const worker = await createWorker('eng');
+      try {
+        const parts: string[] = [];
+        for (const img of images) {
+          const { data } = await worker.recognize(img.file!);
+          parts.push(data.text);
+        }
+        return parts.join(' ').replace(/\s+/g, ' ').trim();
+      } finally {
+        await worker.terminate();
+      }
+    } catch {
+      this.toast('Couldn’t read the image — check your internet connection');
+      return '';
+    }
   }
 
   send(): void {
@@ -184,7 +240,8 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       }
       this.pending.push({
         name: f.name,
-        url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined
+        url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
+        file: f
       });
     }
     input.value = '';
@@ -197,13 +254,21 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   // --- Read aloud ----------------------------------------------------------
 
-  private plainText(m: Msg): string {
-    if (m.fallback) return FALLBACK_TEXT;
-    if (m.note) return m.note;
+  private stripHtml(html: string): string {
     const tmp = document.createElement('div');
-    // Break after block elements so list items aren't run together.
-    tmp.innerHTML = (m.entry?.answer || '').replace(/<\/(p|li)>/g, '$&\n');
+    // Break after block elements and bullet list items so they aren't run together.
+    tmp.innerHTML = html.replace(/<li>/g, '$&• ').replace(/<\/(p|li)>/g, '$&\n');
     return (tmp.textContent || '').trim();
+  }
+
+  private plainText(m: Msg): string {
+    if (m.fallback) return FALLBACK_PARAS.join(' ');
+    if (m.note) return m.note;
+    return this.stripHtml(m.entry?.answer || '');
+  }
+
+  private sourceLine(s: Source, i: number): string {
+    return `${i + 1}. ${s.title} — ${s.section} (updated ${s.updated})`;
   }
 
   speak(m: Msg): void {
@@ -247,15 +312,77 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     this.selectedSource = null;
   }
 
+  /** Copies the answer plus its sources, ready to paste into Teams or email. */
   copy(m: Msg): void {
-    const txt = this.plainText(m);
+    let txt = this.plainText(m);
+    const sources = m.entry?.sources || [];
+    if (sources.length) txt += '\n\nSources:\n' + sources.map((s, i) => this.sourceLine(s, i)).join('\n');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(txt).then(
-        () => this.toast('Answer copied'),
-        () => this.toast('Answer copied')
+        () => this.toast('Answer copied with sources'),
+        () => this.toast('Couldn’t copy — your browser blocked clipboard access')
       );
     } else {
-      this.toast('Answer copied');
+      this.toast('Couldn’t copy — your browser blocked clipboard access');
+    }
+  }
+
+  /** Saves the question, answer and sources as a PDF. */
+  async downloadPdf(m: Msg): Promise<void> {
+    if (!m.entry) return;
+    const entry = m.entry;
+    try {
+      const { jsPDF } = await import('jspdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const margin = 56;
+      const width = doc.internal.pageSize.getWidth() - margin * 2;
+      const pageH = doc.internal.pageSize.getHeight();
+      const INK: [number, number, number] = [26, 38, 44];
+      const SOFT: [number, number, number] = [87, 112, 123];
+      const BRAND: [number, number, number] = [12, 108, 120];
+      let y = margin;
+
+      // jsPDF's built-in fonts only cover Latin-1, so swap typographic characters.
+      const safe = (t: string) =>
+        t.replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-').replace(/→/g, '->')
+          .replace(/•/g, '-').replace(/…/g, '...').replace(/[^\x00-\xFF]/g, '');
+
+      const write = (text: string, size: number, style: 'normal' | 'bold', color: [number, number, number], gapAfter: number) => {
+        doc.setFont('helvetica', style);
+        doc.setFontSize(size);
+        doc.setTextColor(color[0], color[1], color[2]);
+        const lineH = size * 1.4;
+        for (const line of doc.splitTextToSize(safe(text), width) as string[]) {
+          if (y + lineH > pageH - margin) {
+            doc.addPage();
+            y = margin;
+          }
+          doc.text(line, margin, y + size);
+          y += lineH;
+        }
+        y += gapAfter;
+      };
+
+      write('WorkLens answer', 18, 'bold', BRAND, 2);
+      write(new Date().toLocaleString(), 9, 'normal', SOFT, 18);
+      if (m.q) {
+        write('QUESTION', 9, 'bold', SOFT, 2);
+        write(m.q, 12, 'normal', INK, 16);
+      }
+      write('ANSWER', 9, 'bold', SOFT, 2);
+      for (const para of this.plainText(m).split('\n').filter((p) => p.trim())) write(para, 11.5, 'normal', INK, 4);
+      y += 12;
+      write('SOURCES', 9, 'bold', SOFT, 4);
+      entry.sources.forEach((s, i) => {
+        write(this.sourceLine(s, i), 11, 'bold', INK, 2);
+        write(this.stripHtml(s.passage), 10, 'normal', SOFT, 10);
+      });
+
+      const name = (m.q || entry.id).replace(/[^\w\s-]/g, '').trim().slice(0, 60) || 'answer';
+      doc.save(`WorkLens - ${name}.pdf`);
+      this.toast('PDF downloaded');
+    } catch {
+      this.toast('Couldn’t create the PDF');
     }
   }
 
