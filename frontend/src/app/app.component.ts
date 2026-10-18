@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { KB, SUGGEST, SHORTCUTS, KBEntry, Source, Shortcut } from './worklens.data';
+import { HttpClient } from '@angular/common/http';
+import { inject } from '@angular/core';
 
 interface Msg {
   role: 'user' | 'bot';
@@ -33,6 +35,9 @@ export class AppComponent implements AfterViewChecked {
 
   private toastT: any;
   private pendingScroll = false;
+
+  private http = inject(HttpClient);
+  private apiUrl = 'http://127.0.0.1:8000/query';
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
 
@@ -85,19 +90,54 @@ export class AppComponent implements AfterViewChecked {
   ask(text: string): void {
     text = (text || '').trim();
     if (!text) return;
+
     this.messages.push({ role: 'user', text });
     const typingMsg: Msg = { role: 'bot', typing: true };
     this.messages.push(typingMsg);
     this.pendingScroll = true;
     this.railOpen = false;
 
-    const e = this.match(text);
-    setTimeout(() => {
-      const i = this.messages.indexOf(typingMsg);
-      if (i > -1) this.messages.splice(i, 1);
-      this.messages.push(e ? { role: 'bot', entry: e } : { role: 'bot', fallback: true });
-      this.pendingScroll = true;
-    }, 650);
+    this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: text })
+      .subscribe({
+        next: (res) => {
+          const i = this.messages.indexOf(typingMsg);
+          if (i > -1) this.messages.splice(i, 1);
+
+          const isNotFound = res.answer.includes("Information not found");
+
+          if (isNotFound) {
+            this.messages.push({ role: 'bot', fallback: true });
+          } else {
+            // Format raw sources into UI shape
+            const sources: Source[] = (res.sources || []).map((doc, idx) => ({
+              title: `Document Chunk ${idx + 1}`,
+              section: 'Knowledge Base',
+              updated: '2026',
+              fresh: true,
+              passage: doc.replace(/\n/g, '<br/>')
+            }));
+
+            const entry: KBEntry = {
+              id: String(Date.now()),
+              cat: 'Policy',
+              kw: [],
+              conf: 'high',
+              answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
+              sources
+            };
+
+            this.messages.push({ role: 'bot', entry });
+          }
+          this.pendingScroll = true;
+        },
+        error: (err) => {
+          console.error('API Error:', err);
+          const i = this.messages.indexOf(typingMsg);
+          if (i > -1) this.messages.splice(i, 1);
+          this.messages.push({ role: 'bot', fallback: true });
+          this.pendingScroll = true;
+        }
+      });
   }
 
   send(): void {
@@ -149,7 +189,7 @@ export class AppComponent implements AfterViewChecked {
     this.dark = !this.dark;
     try {
       localStorage.setItem('wl-theme', this.dark ? 'dark' : 'light');
-    } catch {}
+    } catch { }
     this.applyTheme();
   }
 
