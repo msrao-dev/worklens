@@ -51,7 +51,7 @@ async def ingest(file: UploadFile = File(...)):
     )
 
     chunks = splitter.split_text(text)
-    store_chunks(chunks)
+    store_chunks(chunks, filename=file.filename)
 
     return {
         "status": "success",

@@ -1,5 +1,6 @@
 import os
 import chromadb
+import uuid
 from sentence_transformers import SentenceTransformer
 from ollama import chat
 
@@ -11,21 +12,27 @@ MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME)
 client = chromadb.PersistentClient(path=CHROMA_PATH)
 collection = client.get_or_create_collection("employee_docs")
 
-def store_chunks(chunks):
+def store_chunks(chunks, filename="doc"):
 
     embeddings = MODEL.encode(
         chunks
     ).tolist()
 
     ids = [
-        f"chunk_{i}"
+        f"{filename}_{i}_{uuid.uuid4().hex[:8]}"
+        for i in range(len(chunks))
+    ]
+
+    metadatas = [
+        {"source": filename, "chunk_index": i}
         for i in range(len(chunks))
     ]
 
     collection.add(
         ids=ids,
         documents=chunks,
-        embeddings=embeddings
+        embeddings=embeddings,
+        metadatas=metadatas
     )
 
 def ask_question(question):
