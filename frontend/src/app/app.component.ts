@@ -1,10 +1,9 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { KB, SUGGEST, SHORTCUTS, KBEntry, Source, Shortcut } from './worklens.data';
-import { HttpClient } from '@angular/common/http';
-import { inject } from '@angular/core';
 import { environment } from '../environments/environment';
 
 interface Msg {
@@ -39,6 +38,7 @@ export class AppComponent implements AfterViewChecked {
 
   private http = inject(HttpClient);
   private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
 
@@ -52,8 +52,7 @@ export class AppComponent implements AfterViewChecked {
     }
     this.applyTheme();
 
-    // Seed the opening state with one worked example, so the first view
-    // shows the product in action rather than an empty shell.
+    // Seed the opening state with one worked example
     this.messages.push({ role: 'user', text: 'How many leave days do I have left?' });
     this.messages.push({ role: 'bot', entry: KB[0] });
   }
@@ -70,7 +69,7 @@ export class AppComponent implements AfterViewChecked {
     return /202[0-4]/.test(updated);
   }
 
-  /** Keyword match against the sample KB. In production this is the RAG call. */
+  /** Keyword match against the sample KB. */
   private match(text: string): KBEntry | null {
     const t = ' ' + text.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ') + ' ';
     let best: KBEntry | null = null;
@@ -98,6 +97,19 @@ export class AppComponent implements AfterViewChecked {
     this.pendingScroll = true;
     this.railOpen = false;
 
+    // 1. Local mock bypass for instant testing
+    if (this.useMock) {
+      const e = this.match(text);
+      setTimeout(() => {
+        const i = this.messages.indexOf(typingMsg);
+        if (i > -1) this.messages.splice(i, 1);
+        this.messages.push(e ? { role: 'bot', entry: e } : { role: 'bot', fallback: true });
+        this.pendingScroll = true;
+      }, 500);
+      return;
+    }
+
+    // 2. Real API call to FastAPI backend
     this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: text })
       .subscribe({
         next: (res) => {
@@ -109,7 +121,6 @@ export class AppComponent implements AfterViewChecked {
           if (isNotFound) {
             this.messages.push({ role: 'bot', fallback: true });
           } else {
-            // Format raw sources into UI shape
             const sources: Source[] = (res.sources || []).map((doc, idx) => ({
               title: `Document Chunk ${idx + 1}`,
               section: 'Knowledge Base',
@@ -158,6 +169,7 @@ export class AppComponent implements AfterViewChecked {
   openDoc(s: Source): void {
     this.selectedSource = s;
   }
+
   closeDoc(): void {
     this.selectedSource = null;
   }
