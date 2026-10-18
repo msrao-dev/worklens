@@ -12,9 +12,16 @@
       <div class="tagline">Find it. Fast.</div>
     </div>
     <div class="rail-scroll">
-      <div class="rail-label">Suggested questions</div>
-      <div class="suggest">
-        <button *ngFor="let q of suggest; trackBy: trackByIndex" (click)="ask(q)">{{ q }}</button>
+      <div class="rail-label rail-label-row">
+        <span>History</span>
+        <button class="clear-history" *ngIf="history.length" (click)="clearHistory()">Clear</button>
+      </div>
+      <div class="history">
+        <button *ngFor="let q of history; trackBy: trackByIndex" (click)="ask(q)" [title]="q">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+          <span>{{ q }}</span>
+        </button>
+        <div class="history-empty" *ngIf="!history.length">Questions you ask will show up here.</div>
       </div>
       <div class="rail-label">My shortcuts</div>
       <div class="shortcuts">
@@ -55,7 +62,18 @@
           <!-- User message -->
           <div class="msg user" *ngIf="m.role === 'user'">
             <div class="avatar me">MS</div>
-            <div class="bubble">{{ m.text }}</div>
+            <div class="bubble">
+              <div class="sent-files" *ngIf="m.files?.length">
+                <ng-container *ngFor="let f of m.files; trackBy: trackByIndex">
+                  <img *ngIf="f.url" class="sent-img" [src]="f.url" [alt]="f.name" />
+                  <span *ngIf="!f.url" class="sent-file">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+                    {{ f.name }}
+                  </span>
+                </ng-container>
+              </div>
+              {{ m.text }}
+            </div>
           </div>
 
           <!-- Bot message -->
@@ -99,12 +117,7 @@
                     <span><b>{{ e.conf === 'high' ? 'High' : 'Medium' }}</b> confidence</span>
                   </div>
                   <div class="acts">
-                    <button class="act up" [class.on]="m.up" title="Helpful" (click)="vote(m, true)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M7 11v9H4a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1zM7 11l4-8a2 2 0 0 1 2 2v3h5a2 2 0 0 1 2 2.3l-1.2 6A2 2 0 0 1 16.8 20H7"/></svg>
-                    </button>
-                    <button class="act down" [class.on]="m.down" title="Not helpful" (click)="vote(m, false)">
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M17 13V4h3a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1zM17 13l-4 8a2 2 0 0 1-2-2v-3H6a2 2 0 0 1-2-2.3l1.2-6A2 2 0 0 1 7.2 4H17"/></svg>
-                    </button>
+                    <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
                     <button class="act copy" title="Copy answer" (click)="copy(m)">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>
                     </button>
@@ -129,10 +142,23 @@
                       Route this to the right team
                     </button>
                   </div>
+                  <div class="acts">
+                    <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
+                  </div>
                 </div>
                 <div class="gap-note">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 9v4M12 17h.01M10.3 3.9 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>
                   <span>Logged as a <strong>knowledge gap</strong> — if several people ask this, the admin dashboard flags it so the missing document can be added.</span>
+                </div>
+              </ng-container>
+
+              <!-- Plain note, e.g. upload acknowledgement -->
+              <ng-container *ngIf="m.note">
+                <div class="answer"><p>{{ m.note }}</p></div>
+                <div class="meta">
+                  <div class="acts">
+                    <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
+                  </div>
                 </div>
               </ng-container>
             </div>
@@ -143,6 +169,20 @@
 
     <div class="composer-wrap">
       <form class="composer" (ngSubmit)="send()">
+        <div class="pending" *ngIf="pending.length">
+          <span class="pending-item" *ngFor="let f of pending; let i = index; trackBy: trackByIndex">
+            <img *ngIf="f.url" [src]="f.url" alt="" />
+            <svg *ngIf="!f.url" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            <span class="pending-name">{{ f.name }}</span>
+            <button type="button" (click)="removePending(i)" [attr.aria-label]="'Remove ' + f.name">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+            </button>
+          </span>
+        </div>
+        <button type="button" class="attach" (click)="fileInput.click()" title="Attach image or file" aria-label="Attach image or file">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <input #fileInput type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
         <textarea
           [(ngModel)]="input"
           name="q"
@@ -150,7 +190,7 @@
           placeholder="Ask about leave, IT, benefits, onboarding…"
           autocomplete="off"
           (keydown)="onKey($event)"></textarea>
-        <button class="send" type="submit" [disabled]="!input.trim()" aria-label="Send">
+        <button class="send" type="submit" [disabled]="!input.trim() && !pending.length" aria-label="Send">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
         </button>
       </form>
@@ -158,6 +198,14 @@
     </div>
   </main>
 </div>
+
+<!-- Read-aloud button, shared by every bot reply -->
+<ng-template #playBtn let-m>
+  <button class="act play" [class.on]="speaking === m" [title]="speaking === m ? 'Stop reading' : 'Read aloud'" (click)="speak(m)">
+    <svg *ngIf="speaking !== m" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z"/></svg>
+    <svg *ngIf="speaking === m" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+  </button>
+</ng-template>
 
 <!-- Source modal -->
 <div class="overlay" [class.show]="selectedSource" (click)="closeDoc()">

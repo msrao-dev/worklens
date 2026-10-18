@@ -150,15 +150,6 @@ export const KB: KBEntry[] = [
   }
 ];
 
-export const SUGGEST: string[] = [
-  'How many leave days do I have left?',
-  'How do I reset my password?',
-  'What does my health insurance cover?',
-  'How do I connect to the VPN?',
-  'When is the appraisal cycle?',
-  'What should I do on my first day?'
-];
-
 const I_LEAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
 const I_ORG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2h12v2"/></svg>';
 const I_INBOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14l2 7v7H3v-7z"/></svg>';
