@@ -1,19 +1,15 @@
+import os
 import chromadb
-
 from sentence_transformers import SentenceTransformer
 from ollama import chat
 
-MODEL = SentenceTransformer(
-    "BAAI/bge-small-en-v1.5"
-)
+CHROMA_PATH = os.getenv("CHROMA_PATH", "./backend/chroma_db")
+EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 
-client = chromadb.PersistentClient(
-    path="./backend/chroma_db"
-)
-
-collection = client.get_or_create_collection(
-    "employee_docs"
-)
+MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME)
+client = chromadb.PersistentClient(path=CHROMA_PATH)
+collection = client.get_or_create_collection("employee_docs")
 
 def store_chunks(chunks):
 
@@ -61,7 +57,7 @@ Question:
 """
 
     response = chat(
-        model="qwen2.5:7b",
+        model=OLLAMA_MODEL_NAME,
         messages=[
             {
                 "role":"user",

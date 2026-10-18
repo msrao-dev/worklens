@@ -17,6 +17,19 @@ node -v
 npm -v
 ```
 
+## Configuration & Environment Variables
+
+The backend API URL defaults to `http://127.0.0.1:8000`.
+
+To change the target API URL, edit `src/environments/environment.ts`:
+
+```typescript
+export const environment = {
+  production: false,
+  apiUrl: 'http://127.0.0.1:8000' // change this to your backend host/port
+};
+```
+
 ## Run it (Windows, macOS or Linux)
 
 From inside this folder:

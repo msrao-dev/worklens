@@ -5,6 +5,7 @@ import { SafeHtmlPipe } from './safe-html.pipe';
 import { KB, SUGGEST, SHORTCUTS, KBEntry, Source, Shortcut } from './worklens.data';
 import { HttpClient } from '@angular/common/http';
 import { inject } from '@angular/core';
+import { environment } from '../environments/environment';
 
 interface Msg {
   role: 'user' | 'bot';
@@ -37,7 +38,7 @@ export class AppComponent implements AfterViewChecked {
   private pendingScroll = false;
 
   private http = inject(HttpClient);
-  private apiUrl = 'http://127.0.0.1:8000/query';
+  private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
 
