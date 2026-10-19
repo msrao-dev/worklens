@@ -17,6 +17,13 @@ node -v
 npm -v
 ```
 
+### Frontend Environment Variables (`src/environments/environment.ts`)
+
+| Key | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `apiUrl` | string | `'http://127.0.0.1:8000'` | Base URL for FastAPI backend |
+| `useMock` | boolean | `false` | When `true`, bypasses the API and uses the local mock KB for instant UI testing |
+
 ## Run it (Windows, macOS or Linux)
 
 From inside this folder:

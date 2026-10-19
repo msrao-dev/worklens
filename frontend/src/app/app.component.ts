@@ -1,8 +1,10 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { KB, SUGGEST, SHORTCUTS, KBEntry, Source, Shortcut } from './worklens.data';
+import { environment } from '../environments/environment';
 
 interface Msg {
   role: 'user' | 'bot';
@@ -34,6 +36,10 @@ export class AppComponent implements AfterViewChecked {
   private toastT: any;
   private pendingScroll = false;
 
+  private http = inject(HttpClient);
+  private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private useMock = (environment as any).useMock ?? false;
+
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
 
   constructor() {
@@ -46,8 +52,7 @@ export class AppComponent implements AfterViewChecked {
     }
     this.applyTheme();
 
-    // Seed the opening state with one worked example, so the first view
-    // shows the product in action rather than an empty shell.
+    // Seed the opening state with one worked example
     this.messages.push({ role: 'user', text: 'How many leave days do I have left?' });
     this.messages.push({ role: 'bot', entry: KB[0] });
   }
@@ -64,7 +69,7 @@ export class AppComponent implements AfterViewChecked {
     return /202[0-4]/.test(updated);
   }
 
-  /** Keyword match against the sample KB. In production this is the RAG call. */
+  /** Keyword match against the sample KB. */
   private match(text: string): KBEntry | null {
     const t = ' ' + text.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ') + ' ';
     let best: KBEntry | null = null;
@@ -85,19 +90,66 @@ export class AppComponent implements AfterViewChecked {
   ask(text: string): void {
     text = (text || '').trim();
     if (!text) return;
+
     this.messages.push({ role: 'user', text });
     const typingMsg: Msg = { role: 'bot', typing: true };
     this.messages.push(typingMsg);
     this.pendingScroll = true;
     this.railOpen = false;
 
-    const e = this.match(text);
-    setTimeout(() => {
-      const i = this.messages.indexOf(typingMsg);
-      if (i > -1) this.messages.splice(i, 1);
-      this.messages.push(e ? { role: 'bot', entry: e } : { role: 'bot', fallback: true });
-      this.pendingScroll = true;
-    }, 650);
+    // 1. Local mock bypass for instant testing
+    if (this.useMock) {
+      const e = this.match(text);
+      setTimeout(() => {
+        const i = this.messages.indexOf(typingMsg);
+        if (i > -1) this.messages.splice(i, 1);
+        this.messages.push(e ? { role: 'bot', entry: e } : { role: 'bot', fallback: true });
+        this.pendingScroll = true;
+      }, 500);
+      return;
+    }
+
+    // 2. Real API call to FastAPI backend
+    this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: text })
+      .subscribe({
+        next: (res) => {
+          const i = this.messages.indexOf(typingMsg);
+          if (i > -1) this.messages.splice(i, 1);
+
+          const isNotFound = res.answer.includes("Information not found");
+
+          if (isNotFound) {
+            this.messages.push({ role: 'bot', fallback: true });
+          } else {
+            const sources: Source[] = (res.sources || []).map((doc, idx) => ({
+              title: `Document Chunk ${idx + 1}`,
+              section: 'Knowledge Base',
+              updated: '2026',
+              fresh: true,
+              passage: doc.replace(/\n/g, '<br/>')
+            }));
+
+            const entry: KBEntry = {
+              id: String(Date.now()),
+              cat: 'Policy',
+              kw: [],
+              conf: 'high',
+              answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
+              sources
+            };
+
+            this.messages.push({ role: 'bot', entry });
+          }
+          this.pendingScroll = true;
+        },
+        error: (err) => {
+          console.error('API Error:', err);
+          const i = this.messages.indexOf(typingMsg);
+          if (i > -1) this.messages.splice(i, 1);
+          this.messages.push({ role: 'bot', fallback: true });
+          this.pendingScroll = true;
+        }
+      });
   }
 
   send(): void {
@@ -117,6 +169,7 @@ export class AppComponent implements AfterViewChecked {
   openDoc(s: Source): void {
     this.selectedSource = s;
   }
+
   closeDoc(): void {
     this.selectedSource = null;
   }
@@ -149,7 +202,7 @@ export class AppComponent implements AfterViewChecked {
     this.dark = !this.dark;
     try {
       localStorage.setItem('wl-theme', this.dark ? 'dark' : 'light');
-    } catch {}
+    } catch { }
     this.applyTheme();
   }
 

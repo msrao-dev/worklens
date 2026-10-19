@@ -1,20 +1,32 @@
-from fastapi import FastAPI
-from fastapi import UploadFile
-from fastapi import File
-
 import os
+from dotenv import load_dotenv
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+
+load_dotenv()
 
 from backend.ingest import extract_text
-from backend.rag import (
-    store_chunks,
-    ask_question,
-)
-
+from backend.rag import store_chunks, ask_question, reset_collection
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 app = FastAPI()
 
-UPLOAD_DIR = "./backend/uploads"
+# Configurable CORS origins
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ORIGINS", 
+    "http://localhost:4200,http://127.0.0.1:4200"
+).split(",")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in ALLOWED_ORIGINS if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+UPLOAD_DIR = os.getenv("UPLOAD_DIR", "./backend/uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 @app.get("/")
 def root():
@@ -25,19 +37,13 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status":"ok"}
+    return {"status": "ok"}
 
 @app.post("/ingest")
-async def ingest(
-    file: UploadFile = File(...)
-):
+async def ingest(file: UploadFile = File(...)):
+    filepath = os.path.join(UPLOAD_DIR, file.filename)
 
-    filepath = os.path.join(
-        UPLOAD_DIR,
-        file.filename
-    )
-
-    with open(filepath,"wb") as f:
+    with open(filepath, "wb") as f:
         f.write(await file.read())
 
     text = extract_text(filepath)
@@ -48,17 +54,18 @@ async def ingest(
     )
 
     chunks = splitter.split_text(text)
-
-    store_chunks(chunks)
+    store_chunks(chunks, filename=file.filename)
 
     return {
-        "status":"success",
-        "chunks":len(chunks)
+        "status": "success",
+        "chunks": len(chunks)
     }
 
 @app.post("/query")
 async def query(body: dict):
+    return ask_question(body["question"])
 
-    return ask_question(
-        body["question"]
-    )
+@app.post("/reset")
+async def reset():
+    reset_collection()
+    return {"status": "success"}

@@ -22,6 +22,7 @@ flatbuffers==25.12.19
 frozenlist==1.8.0
 fsspec==2026.9.0
 googleapis-common-protos==1.75.3
+groq==1.7.0
 grpcio==1.84.0
 h11==0.16.0
 hf-xet==1.6.0
