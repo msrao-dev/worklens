@@ -1,8 +1,10 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { KB, SHORTCUTS, QUESTIONS, RELATED, POPULAR, KBEntry, Source, Shortcut } from './worklens.data';
+import { environment } from '../environments/environment';
 
 interface Attachment {
   name: string;
@@ -64,6 +66,10 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private toastT: any;
   private pendingScroll = false;
   private utterance: SpeechSynthesisUtterance | null = null;
+
+  private http = inject(HttpClient);
+  private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
 
@@ -142,17 +148,48 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   }
 
   private reply(typingMsg: Msg, text: string, files: Attachment[], hadImages: boolean, fromImage: string): void {
-    const i = this.messages.indexOf(typingMsg);
-    if (i > -1) this.messages.splice(i, 1);
-
     const query = [text, fromImage].filter(Boolean).join(' ');
-    const e = query ? this.match(query) : null;
     const imageText = fromImage || undefined;
+
+    // Real API call to the FastAPI backend, unless mock data is switched on.
+    if (query && !this.useMock) {
+      this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: query }).subscribe({
+        next: (res) => {
+          if (res.answer.includes('Information not found')) {
+            this.push(typingMsg, this.fallbackReply(text, imageText));
+            return;
+          }
+          const sources: Source[] = (res.sources || []).map((doc, idx) => ({
+            title: `Document Chunk ${idx + 1}`,
+            section: 'Knowledge Base',
+            updated: '2026',
+            fresh: true,
+            passage: doc.replace(/\n/g, '<br/>')
+          }));
+          const entry: KBEntry = {
+            id: String(Date.now()),
+            cat: 'Policy',
+            kw: [],
+            conf: 'high',
+            answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
+            sources
+          };
+          this.push(typingMsg, { role: 'bot', entry, q: text || query, imageText });
+        },
+        error: (err) => {
+          console.error('API Error:', err);
+          this.push(typingMsg, this.fallbackReply(text, imageText));
+        }
+      });
+      return;
+    }
+
+    const e = query ? this.match(query) : null;
     let reply: Msg;
     if (e) {
       reply = { role: 'bot', entry: e, q: text || QUESTIONS[e.id], imageText, followups: this.followups(e.id) };
     } else if (query) {
-      reply = { role: 'bot', fallback: true, q: text, imageText, followups: POPULAR.map((id) => QUESTIONS[id]) };
+      reply = this.fallbackReply(text, imageText);
     } else if (hadImages) {
       reply = { role: 'bot', note: 'I couldn’t find any readable text in that image. Try a clearer screenshot, or type your question.' };
     } else {
@@ -161,6 +198,17 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         note: `Got your ${files.length === 1 ? 'file' : files.length + ' files'}. I can read text from images, but other files aren’t supported yet.`
       };
     }
+    this.push(typingMsg, reply);
+  }
+
+  private fallbackReply(text: string, imageText?: string): Msg {
+    return { role: 'bot', fallback: true, q: text, imageText, followups: POPULAR.map((id) => QUESTIONS[id]) };
+  }
+
+  /** Replace the typing indicator with the reply. */
+  private push(typingMsg: Msg, reply: Msg): void {
+    const i = this.messages.indexOf(typingMsg);
+    if (i > -1) this.messages.splice(i, 1);
     this.messages.push(reply);
     this.pendingScroll = true;
   }
