@@ -19,6 +19,7 @@
             "tsConfig": "tsconfig.app.json",
             "assets": [],
             "styles": ["src/styles.css"],
+            "allowedCommonJsDependencies": ["tesseract.js", "is-electron", "html2canvas", "dompurify", "raf", "rgbcolor", "core-js", "regenerator-runtime/runtime"],
             "scripts": []
           },
           "configurations": {

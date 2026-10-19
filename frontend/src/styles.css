@@ -68,10 +68,17 @@ button{font-family:inherit;cursor:pointer}
 .rail-scroll{overflow-y:auto;flex:1;min-height:0;padding:4px 14px 14px}
 .rail-label{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink-faint);margin:16px 4px 8px}
-.suggest{display:flex;flex-direction:column;gap:6px}
-.suggest button{text-align:left;background:transparent;border:1px solid transparent;color:var(--ink-soft);
-  padding:9px 11px;border-radius:10px;font-size:13.5px;line-height:1.35;transition:.14s}
-.suggest button:hover{background:var(--surface);color:var(--ink);border-color:var(--line-soft)}
+.rail-label-row{display:flex;align-items:center;justify-content:space-between}
+.clear-history{background:none;border:none;padding:0;font:inherit;letter-spacing:inherit;text-transform:inherit;
+  color:var(--ink-faint);transition:.14s}
+.clear-history:hover{color:var(--brand)}
+.history{display:flex;flex-direction:column;gap:2px}
+.history button{display:flex;align-items:center;gap:8px;text-align:left;background:transparent;border:1px solid transparent;
+  color:var(--ink-soft);padding:8px 10px;border-radius:10px;font-size:13.5px;line-height:1.35;transition:.14s;min-width:0}
+.history button:hover{background:var(--surface);color:var(--ink);border-color:var(--line-soft)}
+.history button svg{width:14px;height:14px;flex:0 0 auto;color:var(--ink-faint)}
+.history button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.history-empty{font-size:12.5px;color:var(--ink-faint);padding:4px 10px}
 .shortcuts{display:flex;flex-wrap:wrap;gap:7px}
 .chip{background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);
   padding:6px 11px;border-radius:999px;font-size:12.5px;transition:.14s;display:inline-flex;align-items:center;gap:6px}
@@ -160,9 +167,27 @@ button{font-family:inherit;cursor:pointer}
 .act{width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;
   color:var(--ink-faint);display:inline-flex;align-items:center;justify-content:center;transition:.14s}
 .act:hover{color:var(--brand);background:var(--surface-2)}
-.act.on{color:var(--good);background:var(--good-soft)}
-.act.down.on{color:var(--warn);background:var(--warn-soft)}
+.act.on{color:var(--brand);background:var(--surface-2)}
 .act svg{width:15px;height:15px}
+.act.play svg{width:14px;height:14px}
+.followups{margin-top:14px}
+.followups-h{font-family:var(--font-mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-faint);margin-bottom:7px}
+.followups-list{display:flex;flex-wrap:wrap;gap:6px}
+.followup{background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);padding:6px 11px;
+  border-radius:999px;font-size:12.5px;line-height:1.3;text-align:left;transition:.14s}
+.followup:hover{border-color:var(--brand);color:var(--brand)}
+.typing-row{display:flex;align-items:center;gap:10px}
+.typing-status{font-size:12.5px;color:var(--ink-faint)}
+.from-image{display:flex;align-items:flex-start;gap:7px;font-size:12px;color:var(--ink-faint);margin-bottom:8px;
+  line-height:1.4;overflow-wrap:anywhere}
+.from-image svg{width:13px;height:13px;flex:0 0 auto;margin-top:2px;color:var(--brand)}
+.sent-files{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
+.sent-files:last-child{margin-bottom:0}
+.sent-img{max-width:180px;max-height:140px;border-radius:8px;display:block;object-fit:cover}
+.sent-file{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;padding:5px 9px;border-radius:8px;
+  background:rgba(127,127,127,.18);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sent-file svg{width:14px;height:14px;flex:0 0 auto}
 .ask-human{font-size:11.5px;color:var(--brand);background:none;border:none;padding:0;text-decoration:underline;
   text-underline-offset:2px}
 
@@ -179,10 +204,24 @@ button{font-family:inherit;cursor:pointer}
 /* ---------- Composer ---------- */
 .composer-wrap{padding:10px 20px 18px;background:var(--bg)}
 .composer{max-width:760px;margin:0 auto;background:var(--surface);border:1px solid var(--line);
-  border-radius:16px;box-shadow:var(--shadow);padding:8px 8px 8px 16px;display:flex;align-items:flex-end;gap:8px;
+  border-radius:16px;box-shadow:var(--shadow);padding:8px;display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px;
   transition:border-color .14s}
+.attach{width:38px;height:38px;flex:0 0 auto;border-radius:11px;border:none;background:transparent;color:var(--ink-soft);
+  display:inline-flex;align-items:center;justify-content:center;transition:.14s}
+.attach:hover{background:var(--surface-2);color:var(--brand)}
+.attach svg{width:19px;height:19px}
+.pending{flex-basis:100%;display:flex;flex-wrap:wrap;gap:6px;padding:2px 2px 0}
+.pending-item{display:inline-flex;align-items:center;gap:6px;max-width:220px;padding:4px 4px 4px 6px;border-radius:9px;
+  border:1px solid var(--line);background:var(--surface-2);font-size:12.5px;color:var(--ink-soft)}
+.pending-item img{width:26px;height:26px;border-radius:5px;object-fit:cover;flex:0 0 auto}
+.pending-item > svg{width:15px;height:15px;flex:0 0 auto}
+.pending-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pending-item button{width:20px;height:20px;flex:0 0 auto;border:none;border-radius:5px;background:transparent;
+  color:var(--ink-faint);display:inline-flex;align-items:center;justify-content:center}
+.pending-item button:hover{color:var(--ink);background:var(--line-soft)}
+.pending-item button svg{width:11px;height:11px}
 .composer:focus-within{border-color:var(--brand)}
-.composer textarea{flex:1;border:none;outline:none;resize:none;background:transparent;color:var(--ink);
+.composer textarea{flex:1;min-width:0;border:none;outline:none;resize:none;background:transparent;color:var(--ink);
   font-family:inherit;font-size:14.5px;line-height:1.45;max-height:120px;padding:7px 0}
 .composer textarea::placeholder{color:var(--ink-faint)}
 .send{width:38px;height:38px;flex:0 0 auto;border-radius:11px;border:none;background:var(--brand);color:#fff;

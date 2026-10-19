@@ -150,16 +150,44 @@ export const KB: KBEntry[] = [
   }
 ];
 
-export const SUGGEST: string[] = [
-  'How many leave days do I have left?',
-  'How do I reset my password?',
-  'What does my health insurance cover?',
-  'How do I connect to the VPN?',
-  'When is the appraisal cycle?',
-  'What should I do on my first day?'
-];
+/** One canonical question per KB entry; each matches its own entry's keywords. */
+export const QUESTIONS: Record<string, string> = {
+  leavebal: 'How many leave days do I have left?',
+  applyleave: 'How do I apply for leave?',
+  password: 'How do I reset my password?',
+  vpn: 'How do I connect to the VPN?',
+  reimburse: 'How do I claim internet reimbursement?',
+  insurance: 'What does my health insurance cover?',
+  onboard: 'What should I do on my first day?',
+  notice: 'What is my notice period?',
+  room: 'How do I book a meeting room?',
+  appraisal: 'When is the appraisal cycle?',
+  device: 'Can I use my personal device for work?',
+  manager: 'Who is my manager?',
+  approvals: 'Do I have any pending approvals?'
+};
 
-const I_LEAVE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
+/** Follow-up questions offered after each answer, by KB entry id. */
+export const RELATED: Record<string, string[]> = {
+  leavebal: ['applyleave', 'approvals', 'notice'],
+  applyleave: ['leavebal', 'approvals', 'manager'],
+  password: ['vpn', 'device'],
+  vpn: ['password', 'device'],
+  reimburse: ['approvals', 'insurance'],
+  insurance: ['reimburse', 'leavebal'],
+  onboard: ['device', 'manager', 'insurance'],
+  notice: ['leavebal', 'appraisal'],
+  room: ['device', 'onboard'],
+  appraisal: ['manager', 'notice'],
+  device: ['vpn', 'password'],
+  manager: ['appraisal', 'approvals'],
+  approvals: ['reimburse', 'leavebal']
+};
+
+/** Offered when nothing in the knowledge base matches. */
+export const POPULAR = ['leavebal', 'password', 'insurance'];
+
+const I_LEAVE ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
 const I_ORG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2h12v2"/></svg>';
 const I_INBOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14l2 7v7H3v-7z"/></svg>';
 const I_KEY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8" cy="8" r="4"/><path d="M11 11l8 8M16 16l2-2M19 19l2-2"/></svg>';
