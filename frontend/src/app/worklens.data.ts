@@ -22,12 +22,6 @@ export interface KBEntry {
   sources: Source[];
 }
 
-export interface Shortcut {
-  label: string;
-  icon: string; // inline SVG
-  q: string;
-}
-
 export const KB: KBEntry[] = [
   {
     id: 'leavebal', cat: 'HR', conf: 'high',
@@ -186,15 +180,3 @@ export const RELATED: Record<string, string[]> = {
 
 /** Offered when nothing in the knowledge base matches. */
 export const POPULAR = ['leavebal', 'password', 'insurance'];
-
-const I_LEAVE ='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/></svg>';
-const I_ORG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="9" y="3" width="6" height="5" rx="1"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-2h12v2"/></svg>';
-const I_INBOX = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M3 12h5l2 3h4l2-3h5"/><path d="M5 5h14l2 7v7H3v-7z"/></svg>';
-const I_KEY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="8" cy="8" r="4"/><path d="M11 11l8 8M16 16l2-2M19 19l2-2"/></svg>';
-
-export const SHORTCUTS: Shortcut[] = [
-  { label: 'My leave balance', icon: I_LEAVE, q: 'How many leave days do I have left?' },
-  { label: 'Who’s my manager?', icon: I_ORG, q: 'Who is my manager?' },
-  { label: 'Pending approvals', icon: I_INBOX, q: 'Do I have any pending approvals?' },
-  { label: 'Reset password', icon: I_KEY, q: 'How do I reset my password?' }
-];

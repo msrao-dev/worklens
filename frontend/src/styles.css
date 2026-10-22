@@ -79,11 +79,6 @@ button{font-family:inherit;cursor:pointer}
 .history button svg{width:14px;height:14px;flex:0 0 auto;color:var(--ink-faint)}
 .history button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .history-empty{font-size:12.5px;color:var(--ink-faint);padding:4px 10px}
-.shortcuts{display:flex;flex-wrap:wrap;gap:7px}
-.chip{background:var(--surface);border:1px solid var(--line);color:var(--ink-soft);
-  padding:6px 11px;border-radius:999px;font-size:12.5px;transition:.14s;display:inline-flex;align-items:center;gap:6px}
-.chip:hover{border-color:var(--brand);color:var(--brand)}
-.chip svg{width:13px;height:13px}
 .rail-foot{border-top:1px solid var(--line);padding:12px 18px;display:flex;align-items:center;
   justify-content:space-between;gap:8px}
 .idx{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);line-height:1.4}
@@ -221,6 +216,10 @@ button{font-family:inherit;cursor:pointer}
 .pending-item button:hover{color:var(--ink);background:var(--line-soft)}
 .pending-item button svg{width:11px;height:11px}
 .composer:focus-within{border-color:var(--brand)}
+.composer{position:relative}
+.composer.dragging{border:1px dashed var(--brand)}
+.drop-hint{position:absolute;inset:0;z-index:2;border-radius:inherit;display:flex;align-items:center;justify-content:center;
+  background:var(--surface);color:var(--brand);font-size:13.5px;font-weight:600;pointer-events:none}
 .composer textarea{flex:1;min-width:0;border:none;outline:none;resize:none;background:transparent;color:var(--ink);
   font-family:inherit;font-size:14.5px;line-height:1.45;max-height:120px;padding:7px 0}
 .composer textarea::placeholder{color:var(--ink-faint)}
@@ -277,4 +276,26 @@ button{font-family:inherit;cursor:pointer}
   .composer-wrap{padding:8px 14px 14px}
   .welcome h1{font-size:20px}
 }
+/* ---------- Login ---------- */
+.rail-foot .icon-btn:first-of-type{margin-left:auto}
+.login{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px}
+.login-card{width:100%;max-width:380px;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);padding:28px 26px 22px;display:flex;flex-direction:column}
+.login-brand{padding:0 0 18px}
+.login-card h1{font-family:var(--font-display);font-size:22px;letter-spacing:-.02em;margin:0 0 4px}
+.login-sub{color:var(--ink-soft);font-size:13.5px;margin:0 0 18px}
+.login-card label{font-size:12.5px;font-weight:600;color:var(--ink-soft);margin:0 0 6px}
+.login-card input{width:100%;border:1px solid var(--line);border-radius:10px;background:var(--surface-2);color:var(--ink);
+  font:inherit;font-size:14.5px;padding:10px 12px;margin-bottom:14px;outline:none;transition:border-color .14s}
+.login-card input:focus{border-color:var(--brand)}
+.login-card input.invalid{border-color:var(--warn)}
+.pw{position:relative}
+.pw input{padding-right:62px}
+.pw-toggle{position:absolute;right:6px;top:6px;height:30px;padding:0 10px;border:none;border-radius:8px;background:transparent;
+  color:var(--brand);font-size:12.5px;font-weight:600}
+.login-error{background:var(--warn-soft);color:var(--warn);font-size:13px;border-radius:10px;padding:8px 11px;margin:-2px 0 14px}
+.login-btn{height:42px;border:none;border-radius:11px;background:var(--brand);color:#fff;font-size:14.5px;font-weight:600;transition:.14s}
+.login-btn:hover{background:var(--brand-deep)}
+.login-btn:disabled{opacity:.7;cursor:default}
+.login-hint{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);text-align:center;margin-top:14px}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
