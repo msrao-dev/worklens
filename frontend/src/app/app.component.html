@@ -1,4 +1,6 @@
-<div class="app">
+<app-login *ngIf="!user" (loggedIn)="onLogin($event)"></app-login>
+
+<div class="app" *ngIf="user">
   <!-- Sidebar -->
   <aside class="rail" [class.open]="railOpen">
     <div class="brand">
@@ -23,15 +25,12 @@
         </button>
         <div class="history-empty" *ngIf="!history.length">Questions you ask will show up here.</div>
       </div>
-      <div class="rail-label">My shortcuts</div>
-      <div class="shortcuts">
-        <button class="chip" *ngFor="let s of shortcuts; trackBy: trackByIndex" (click)="ask(s.q)">
-          <span [innerHTML]="s.icon | safeHtml"></span><span>{{ s.label }}</span>
-        </button>
-      </div>
     </div>
     <div class="rail-foot">
       <div class="idx"><b>12</b> documents indexed<br />HR · IT · Facilities · Finance</div>
+      <button class="icon-btn" (click)="logout()" title="Sign out" aria-label="Sign out">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+      </button>
       <button class="icon-btn" (click)="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
         <svg *ngIf="dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
         <svg *ngIf="!dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
@@ -48,7 +47,7 @@
       </button>
       <div class="top-title">Knowledge Assistant</div>
       <span class="demo-badge">Demo · sample data</span>
-      <div class="ctx"><span class="dot"></span>Signed in as <b>Meera S.</b> · Bengaluru · Engineering</div>
+      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.name }}</b> · Bengaluru · Engineering</div>
     </div>
 
     <div class="stream" #stream>
@@ -61,7 +60,7 @@
         <ng-container *ngFor="let m of messages; trackBy: trackByIndex">
           <!-- User message -->
           <div class="msg user" *ngIf="m.role === 'user'">
-            <div class="avatar me">MS</div>
+            <div class="avatar me">{{ initials }}</div>
             <div class="bubble">
               <div class="sent-files" *ngIf="m.files?.length">
                 <ng-container *ngFor="let f of m.files; trackBy: trackByIndex">
@@ -182,7 +181,10 @@
     </div>
 
     <div class="composer-wrap">
-      <form class="composer" (ngSubmit)="send()">
+      <form class="composer" [class.dragging]="dragging" (ngSubmit)="send()"
+        (dragenter)="onDragOver($event)" (dragover)="onDragOver($event)"
+        (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+        <div class="drop-hint" *ngIf="dragging">Drop image or file to attach</div>
         <div class="pending" *ngIf="pending.length">
           <span class="pending-item" *ngFor="let f of pending; let i = index; trackBy: trackByIndex">
             <img *ngIf="f.url" [src]="f.url" alt="" />
@@ -193,7 +195,7 @@
             </button>
           </span>
         </div>
-        <button type="button" class="attach" (click)="fileInput.click()" title="Attach a screenshot or image to ask about it" aria-label="Attach image or file">
+        <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop a screenshot or image to ask about it" aria-label="Attach image or file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
         <input #fileInput type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />

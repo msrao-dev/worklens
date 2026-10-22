@@ -3,7 +3,8 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
-import { KB, SHORTCUTS, QUESTIONS, RELATED, POPULAR, KBEntry, Source, Shortcut } from './worklens.data';
+import { LoginComponent, User } from './login.component';
+import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
 import { environment } from '../environments/environment';
 
 interface Attachment {
@@ -39,6 +40,7 @@ const FALLBACK_PARAS = [
 /** Minimum keyword score for an answer. In production this is the retrieval similarity threshold. */
 const MIN_MATCH_SCORE = 1;
 
+const USER_KEY = 'wl-user';
 const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
@@ -46,15 +48,16 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, SafeHtmlPipe],
+  imports: [CommonModule, FormsModule, SafeHtmlPipe, LoginComponent],
   templateUrl: './app.component.html'
 })
 export class AppComponent implements AfterViewChecked, OnDestroy {
+  user: User | null = this.loadUser();
   history: string[] = this.loadHistory();
-  shortcuts: Shortcut[] = SHORTCUTS;
   messages: Msg[] = [];
   input = '';
   pending: Attachment[] = [];
+  dragging = false;
   speaking: Msg | null = null;
   fallbackParas = FALLBACK_PARAS;
   dark = false;
@@ -99,6 +102,38 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   ngOnDestroy(): void {
     this.stopSpeaking();
+  }
+
+  // --- Session -------------------------------------------------------------
+
+  get initials(): string {
+    const parts = (this.user?.name || '').split(' ').filter(Boolean);
+    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+  }
+
+  onLogin(user: User): void {
+    this.user = user;
+    try {
+      localStorage.setItem(USER_KEY, JSON.stringify(user));
+    } catch {}
+  }
+
+  logout(): void {
+    this.stopSpeaking();
+    this.railOpen = false;
+    this.user = null;
+    try {
+      localStorage.removeItem(USER_KEY);
+    } catch {}
+  }
+
+  private loadUser(): User | null {
+    try {
+      const u = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
+      return u?.email ? u : null;
+    } catch {
+      return null;
+    }
   }
 
   isStale(updated: string): boolean {
@@ -281,7 +316,32 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   // --- Attachments ---------------------------------------------------------
 
   onFiles(input: HTMLInputElement): void {
-    for (const f of Array.from(input.files || [])) {
+    this.addFiles(input.files);
+    input.value = '';
+  }
+
+  onDragOver(e: DragEvent): void {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    this.dragging = true;
+  }
+
+  onDragLeave(e: DragEvent): void {
+    // Ignore leave events fired when moving between child elements.
+    const to = e.relatedTarget as Node | null;
+    if (to && (e.currentTarget as HTMLElement).contains(to)) return;
+    this.dragging = false;
+  }
+
+  onDrop(e: DragEvent): void {
+    e.preventDefault();
+    this.dragging = false;
+    this.addFiles(e.dataTransfer?.files);
+  }
+
+  private addFiles(files: FileList | null | undefined): void {
+    for (const f of Array.from(files || [])) {
       if (f.size > MAX_FILE_BYTES) {
         this.toast(`${f.name} is over 10 MB`);
         continue;
@@ -292,7 +352,6 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         file: f
       });
     }
-    input.value = '';
   }
 
   removePending(i: number): void {
