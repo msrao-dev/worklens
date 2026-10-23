@@ -17,12 +17,14 @@ node -v
 npm -v
 ```
 
-### Frontend Environment Variables (`src/environments/environment.ts`)
+### Frontend Environment Variables
 
 | Key | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `apiUrl` | string | `'http://127.0.0.1:8000'` | Base URL for FastAPI backend |
+| `API_URL` | string | `'http://127.0.0.1:8000'` | Base URL for FastAPI backend; when deploying the Docker image, set this on the container to configure the backend URL at runtime |
 | `useMock` | boolean | `false` | When `true`, bypasses the API and uses the local mock KB for instant UI testing |
+
+For example, set `API_URL` to the backend's browser-accessible URL when starting the frontend container. The built-in localhost URL remains the fallback when no runtime value is provided.
 
 ## Run it (Windows, macOS or Linux)
 
@@ -48,6 +50,32 @@ npm run build
 
 Outputs a static, optimized site to `dist/worklens/` that you can host on any
 web server or static host.
+
+### Docker (PowerShell)
+
+From the repository root:
+
+```powershell
+docker build -t worklens-frontend -f .\frontend\Dockerfile .\frontend
+docker run --rm -p 8080:80 -e API_URL=https://api.example.com worklens-frontend
+```
+
+Alternatively, from inside the `frontend` folder:
+
+```powershell
+docker build -t worklens-frontend .
+docker run --rm -p 8080:80 -e API_URL=https://api.example.com worklens-frontend
+```
+
+Replace `https://api.example.com` with your backend's browser-accessible base
+URL, then open http://localhost:8080.
+
+The build context (the last argument to `docker build`) must be the `frontend`
+folder: the Dockerfile copies `src`, package manifests, and configuration files
+relative to that context. Selecting the Dockerfile with `-f` does not change
+the context. Using the repository root as the context causes missing-source
+errors such as `"/src": not found`; the root `.dockerignore` also excludes
+`frontend` because it is intended for backend builds.
 
 ## Project layout
 
