@@ -17,7 +17,7 @@
             "browser": "src/main.ts",
             "polyfills": ["zone.js"],
             "tsConfig": "tsconfig.app.json",
-            "assets": [],
+            "assets": ["src/env.js"],
             "styles": ["src/styles.css"],
             "allowedCommonJsDependencies": ["tesseract.js", "is-electron", "html2canvas", "dompurify", "raf", "rgbcolor", "core-js", "regenerator-runtime/runtime"],
             "scripts": []

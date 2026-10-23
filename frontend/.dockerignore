@@ -1,0 +1,9 @@
+node_modules/
+.angular/
+dist/
+out-tsc/
+.git/
+.vscode/
+.env
+.env.*
+*.log
