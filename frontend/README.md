@@ -91,19 +91,31 @@ src/
     worklens.data.ts       Sample knowledge base + suggestions + shortcuts
 ```
 
-## Where the real backend plugs in
+## Backend response
 
-Everything funnels through one method in `app.component.ts`:
+With `useMock` disabled, the app posts `{ "question": "..." }` to the backend's
+`/query` endpoint. It expects an answer, an insufficient-evidence flag, and
+retrieved citations:
 
-```ts
-private match(text: string): KBEntry | null { ... }   // keyword match over the sample KB
+```json
+{
+  "answer": "Submit leave requests in HRMS.",
+  "citations": [
+    {
+      "chunk_id": "stored-chunk-id",
+      "document_name": "Leave Policy.pdf",
+      "chunk_index": 2,
+      "page_number": 3,
+      "text": "Leave requests must be submitted in HRMS."
+    }
+  ],
+  "insufficient_evidence": false
+}
 ```
 
-To connect a real assistant, replace the body of `ask()` so that instead of
-calling `match()` it calls your API (e.g. `POST /api/ask` with the question),
-and pushes the returned answer + sources into `messages`. The response just
-needs to match the `KBEntry` / `Source` shapes in `worklens.data.ts`, and the
-whole UI — citations, confidence, freshness, feedback — keeps working unchanged.
+Citation metadata is optional when it is unavailable; the UI displays only
+fields returned by the backend and omits the sources section when there are no
+citations. With `useMock` enabled, the sample knowledge base is used instead.
 
 ## Features in this build
 

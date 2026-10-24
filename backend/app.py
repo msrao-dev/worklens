@@ -5,8 +5,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv()
 
-from backend.ingest import extract_text
-from backend.rag import store_chunks, ask_question, reset_collection
+from backend.ingest import extract_sections
+from backend.rag import AnswerResponse, store_chunks, ask_question, reset_collection
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 app = FastAPI()
@@ -46,22 +46,26 @@ async def ingest(file: UploadFile = File(...)):
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
-    text = extract_text(filepath)
-
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200
     )
 
-    chunks = splitter.split_text(text)
-    store_chunks(chunks, filename=file.filename)
+    chunks = []
+    chunk_metadata = []
+    for text, metadata in extract_sections(filepath):
+        section_chunks = splitter.split_text(text)
+        chunks.extend(section_chunks)
+        chunk_metadata.extend([metadata] * len(section_chunks))
+
+    store_chunks(chunks, filename=file.filename, chunk_metadata=chunk_metadata)
 
     return {
         "status": "success",
         "chunks": len(chunks)
     }
 
-@app.post("/query")
+@app.post("/query", response_model=AnswerResponse)
 async def query(body: dict):
     return ask_question(body["question"])
 

@@ -101,15 +101,16 @@
                 </div>
                 <div class="answer" [innerHTML]="e.answer | safeHtml"></div>
 
-                <div class="sources">
+                <div class="sources" *ngIf="e.sources.length">
                   <div class="sources-h">Sources · {{ e.sources.length }}</div>
                   <button class="src" *ngFor="let s of e.sources; trackBy: trackByIndex" (click)="openDoc(s)">
                     <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
                     <div class="src-body">
-                      <div class="src-title">{{ s.title }}</div>
+                      <div class="src-title" *ngIf="s.title">{{ s.title }}</div>
                       <div class="src-meta">
-                        <span>{{ s.section }}</span>
-                        <span class="fresh" [class.stale]="isStale(s.updated)">
+                        <span *ngIf="s.section">{{ s.section }}</span>
+                        <span *ngIf="s.chunkId">Chunk ID {{ s.chunkId }}</span>
+                        <span class="fresh" *ngIf="s.updated" [class.stale]="isStale(s.updated)">
                           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                           updated {{ s.updated }}<span *ngIf="isStale(s.updated)"> · verify</span>
                         </span>
@@ -239,8 +240,12 @@
     <div class="doc-head">
       <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
       <div>
-        <div class="t">{{ s.title }}</div>
-        <div class="s"><span>{{ s.section }}</span><span>Updated {{ s.updated }}</span></div>
+        <div class="t" *ngIf="s.title">{{ s.title }}</div>
+        <div class="s">
+          <span *ngIf="s.section">{{ s.section }}</span>
+          <span *ngIf="s.chunkId">Chunk ID {{ s.chunkId }}</span>
+          <span *ngIf="s.updated">Updated {{ s.updated }}</span>
+        </div>
       </div>
       <button class="icon-btn doc-close" (click)="closeDoc()" aria-label="Close">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
@@ -249,7 +254,7 @@
     <div class="doc-body"><div class="passage" [innerHTML]="s.passage | safeHtml"></div></div>
     <div class="doc-foot">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>
-      <span>{{ isStale(s.updated) ? 'This source is over a year old — verify it’s still current.' : 'Highlighted text is the exact passage this answer was drawn from.' }}</span>
+      <span>{{ isStale(s.updated) ? 'This source is over a year old — verify it’s still current.' : 'This is the retrieved text associated with this citation.' }}</span>
     </div>
   </div>
 </div>

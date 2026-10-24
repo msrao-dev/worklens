@@ -14,6 +14,20 @@ interface Attachment {
   file?: File;
 }
 
+interface ApiCitation {
+  chunk_id: string;
+  document_name?: string | null;
+  chunk_index?: number | null;
+  page_number?: number | null;
+  text: string;
+}
+
+interface ApiAnswer {
+  answer: string;
+  citations?: ApiCitation[];
+  insufficient_evidence: boolean;
+}
+
 interface Msg {
   role: 'user' | 'bot';
   text?: string;
@@ -136,11 +150,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     }
   }
 
-  isStale(updated: string): boolean {
-    return /202[0-4]/.test(updated);
+  isStale(updated?: string): boolean {
+    return !!updated && /202[0-4]/.test(updated);
   }
 
-  /** Keyword match against the sample KB. In production this is the RAG call. */
+  /** Keyword match used only when mock data is enabled. */
   private match(text: string): KBEntry | null {
     const t = ' ' + text.toLowerCase().replace(/[^a-z0-9\s']/g, ' ').replace(/\s+/g, ' ') + ' ';
     let best: KBEntry | null = null;
@@ -188,19 +202,23 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
     // Real API call to the FastAPI backend, unless mock data is switched on.
     if (query && !this.useMock) {
-      this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: query }).subscribe({
+      this.http.post<ApiAnswer>(this.apiUrl, { question: query }).subscribe({
         next: (res) => {
-          if (res.answer.includes('Information not found')) {
-            this.push(typingMsg, this.fallbackReply(text, imageText));
+          if (res.insufficient_evidence) {
+            this.push(typingMsg, { role: 'bot', note: res.answer, q: text || query, imageText });
             return;
           }
-          const sources: Source[] = (res.sources || []).map((doc, idx) => ({
-            title: `Document Chunk ${idx + 1}`,
-            section: 'Knowledge Base',
-            updated: '2026',
-            fresh: true,
-            passage: doc.replace(/\n/g, '<br/>')
-          }));
+          const sources: Source[] = (res.citations || [])
+            .filter((citation) => citation && typeof citation.text === 'string' && citation.text.trim())
+            .map((citation) => ({
+              title: citation.document_name || undefined,
+              section: [
+                citation.chunk_index != null ? `Chunk index ${citation.chunk_index}` : '',
+                citation.page_number != null ? `Page ${citation.page_number}` : ''
+              ].filter(Boolean).join(' · ') || undefined,
+              chunkId: citation.chunk_id,
+              passage: citation.text.replace(/\n/g, '<br/>')
+            }));
           const entry: KBEntry = {
             id: String(Date.now()),
             cat: 'Policy',
@@ -375,7 +393,10 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   }
 
   private sourceLine(s: Source, i: number): string {
-    return `${i + 1}. ${s.title} — ${s.section} (updated ${s.updated})`;
+    const details = [s.section, s.chunkId ? `Chunk ID ${s.chunkId}` : '', s.updated ? `updated ${s.updated}` : '']
+      .filter(Boolean);
+    const title = s.title ? `${i + 1}. ${s.title}` : `${i + 1}.`;
+    return `${title}${details.length ? ` ${details.join(' · ')}` : ''}`;
   }
 
   speak(m: Msg): void {
