@@ -121,7 +121,7 @@
                 </div>
 
                 <div class="meta">
-                  <div class="conf" [class.high]="e.conf === 'high'" [class.med]="e.conf !== 'high'">
+                  <div class="conf" *ngIf="e.conf" [class.high]="e.conf === 'high'" [class.med]="e.conf === 'medium'">
                     <span class="bars"><i></i><i></i><i></i></span>
                     <span><b>{{ e.conf === 'high' ? 'High' : 'Medium' }}</b> confidence</span>
                   </div>
@@ -136,7 +136,7 @@
                   </div>
                 </div>
 
-                <div style="margin-top:8px" *ngIf="e.conf !== 'high'">
+                <div style="margin-top:8px" *ngIf="e.conf === 'medium'">
                   <button class="ask-human" (click)="askHuman()">This is a general answer — ask a human to confirm your case</button>
                 </div>
 

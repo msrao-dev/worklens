@@ -24,7 +24,7 @@ interface ApiCitation {
 
 interface ApiAnswer {
   answer: string;
-  citations?: ApiCitation[];
+  citations: ApiCitation[];
   insufficient_evidence: boolean;
 }
 
@@ -208,8 +208,25 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             this.push(typingMsg, { role: 'bot', note: res.answer, q: text || query, imageText });
             return;
           }
-          const sources: Source[] = (res.citations || [])
-            .filter((citation) => citation && typeof citation.text === 'string' && citation.text.trim())
+          const citations = Array.isArray(res.citations) ? res.citations : [];
+          const validCitations = citations.filter(
+            (citation) =>
+              citation &&
+              typeof citation.chunk_id === 'string' &&
+              citation.chunk_id.trim() &&
+              typeof citation.text === 'string' &&
+              citation.text.trim()
+          );
+          if (!validCitations.length) {
+            this.push(typingMsg, {
+              role: 'bot',
+              note: 'No retrieved citations were returned, so I can’t verify this answer against the knowledge base.',
+              q: text || query,
+              imageText
+            });
+            return;
+          }
+          const sources: Source[] = validCitations
             .map((citation) => ({
               title: citation.document_name || undefined,
               section: [
@@ -223,7 +240,6 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             id: String(Date.now()),
             cat: 'Policy',
             kw: [],
-            conf: 'high',
             answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
             sources
           };

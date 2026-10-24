@@ -15,7 +15,7 @@ export interface KBEntry {
   id: string;
   cat: string;
   kw: string[];
-  conf: 'high' | 'medium';
+  conf?: 'high' | 'medium';
   answer: string; // HTML
   sources: Source[];
 }
