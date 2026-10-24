@@ -1,14 +1,16 @@
 // ---------------------------------------------------------------------------
-// WorkLens sample knowledge base for the opening example and optional mock mode.
+// WorkLens sample knowledge base.
+// In production, this is replaced by a call to a RAG backend (retrieve chunks
+// from a vector DB, then generate a grounded answer). The shape below mirrors
+// what such an API would return: an answer plus the sources it drew from.
 // ---------------------------------------------------------------------------
 
 export interface Source {
-  title?: string;
-  section?: string;
-  updated?: string;
-  fresh?: boolean;
+  title: string;
+  section: string;
+  updated: string;
+  fresh: boolean;
   passage: string; // HTML; <mark> wraps the exact cited span
-  chunkId?: string;
 }
 
 export interface KBEntry {

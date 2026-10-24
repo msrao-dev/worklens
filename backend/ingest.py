@@ -1,30 +1,28 @@
-import os
-from typing import Any
-
 import fitz
 from docx import Document
 
+def extract_text(filepath):
 
-def extract_sections(filepath: str) -> list[tuple[str, dict[str, Any]]]:
-    extension = os.path.splitext(filepath)[1].lower()
+    if filepath.endswith(".pdf"):
+        text = ""
+        pdf = fitz.open(filepath)
 
-    if extension == ".pdf":
-        with fitz.open(filepath) as pdf:
-            return [
-                (page.get_text(), {"page_number": page.number + 1})
-                for page in pdf
-            ]
+        for page in pdf:
+            text += page.get_text()
 
-    if extension == ".docx":
+        return text
+
+    elif filepath.endswith(".docx"):
+
         doc = Document(filepath)
-        return [("\n".join(paragraph.text for paragraph in doc.paragraphs), {})]
 
-    if extension == ".txt":
-        with open(filepath, "r", encoding="utf-8") as file:
-            return [(file.read(), {})]
+        return "\n".join(
+            [p.text for p in doc.paragraphs]
+        )
 
-    raise ValueError("Unsupported file type")
+    elif filepath.endswith(".txt"):
 
+        with open(filepath,"r",encoding="utf-8") as f:
+            return f.read()
 
-def extract_text(filepath: str) -> str:
-    return "\n".join(text for text, _ in extract_sections(filepath))
+    raise Exception("Unsupported file type")
