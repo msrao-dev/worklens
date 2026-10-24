@@ -1,9 +1,5 @@
-import hashlib
-import math
 import os
-from collections.abc import Mapping
-from typing import Any
-
+import hashlib
 import chromadb
 from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
@@ -19,22 +15,6 @@ LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
 OLLAMA_MODEL_NAME = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 GROQ_MODEL_NAME = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
-
-
-def _read_max_distance() -> float | None:
-    value = os.getenv("CHROMA_MAX_DISTANCE", "").strip()
-    if not value:
-        return None
-    try:
-        distance = float(value)
-    except ValueError as exc:
-        raise ValueError("CHROMA_MAX_DISTANCE must be a finite number") from exc
-    if not math.isfinite(distance):
-        raise ValueError("CHROMA_MAX_DISTANCE must be a finite number")
-    return distance
-
-
-MAX_CHROMA_DISTANCE = _read_max_distance()
 
 MODEL = SentenceTransformer(EMBEDDING_MODEL_NAME)
 client = chromadb.PersistentClient(path=CHROMA_PATH)
@@ -53,54 +33,6 @@ class AnswerResponse(BaseModel):
     answer: str
     citations: list[Citation]
     insufficient_evidence: bool
-
-
-def _collection_distance_space() -> str | None:
-    configuration = getattr(collection, "configuration", None)
-    if isinstance(configuration, Mapping):
-        for index_name in ("hnsw", "spann"):
-            index_config = configuration.get(index_name)
-            if index_config is None:
-                continue
-            if not isinstance(index_config, Mapping):
-                return None
-            space = index_config.get("space", "l2")
-            return space if isinstance(space, str) and space in {"l2", "cosine", "ip"} else None
-
-    metadata = getattr(collection, "metadata", None)
-    if isinstance(metadata, Mapping):
-        space = metadata.get("hnsw:space")
-        if isinstance(space, str) and space in {"l2", "cosine", "ip"}:
-            return space
-    return None
-
-
-def _metadata_value(metadata, key: str, value_type: type, minimum: int | None = None):
-    if not isinstance(metadata, Mapping):
-        return None
-    value = metadata.get(key)
-    if not isinstance(value, value_type) or isinstance(value, bool):
-        return None
-    if minimum is not None and value < minimum:
-        return None
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
-def _first_query_batch(results: Mapping[str, Any], field: str) -> list[Any]:
-    batches = results.get(field)
-    if not isinstance(batches, list) or not batches or not isinstance(batches[0], list):
-        return []
-    return batches[0]
-
-
-def _insufficient_evidence(message: str) -> AnswerResponse:
-    return AnswerResponse(
-        answer=message,
-        citations=[],
-        insufficient_evidence=True,
-    )
 
 
 def generate_answer(prompt: str) -> str:
@@ -177,70 +109,50 @@ def ask_question(question: str) -> AnswerResponse:
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=5,
-        include=["documents", "metadatas", "distances"],
+        n_results=5
     )
 
-    retrieved_docs = _first_query_batch(results, "documents")
-    retrieved_ids = _first_query_batch(results, "ids")
-    retrieved_metadatas = _first_query_batch(results, "metadatas")
-    retrieved_distances = _first_query_batch(results, "distances")
-
-    if MAX_CHROMA_DISTANCE is None:
-        return _insufficient_evidence(
-            "Search relevance is not calibrated for this knowledge base, so I can't confirm that retrieved passages are relevant."
-        )
-
-    distance_space = _collection_distance_space()
-    if distance_space is None:
-        return _insufficient_evidence(
-            "The knowledge base distance metric is unavailable, so retrieved passages can't be checked for relevance."
-        )
-
+    docs = results.get("documents") or [[]]
+    ids = results.get("ids") or [[]]
+    metadatas = results.get("metadatas") or [[]]
+    retrieved_docs = docs[0] if docs else []
+    retrieved_ids = ids[0] if ids else []
+    retrieved_metadatas = metadatas[0] if metadatas else []
     citations = []
     for index, text in enumerate(retrieved_docs):
         if not isinstance(text, str) or not text.strip():
             continue
-        if index >= len(retrieved_ids) or not isinstance(retrieved_ids[index], str) or not retrieved_ids[index].strip():
-            continue
-        if index >= len(retrieved_distances):
-            continue
-        distance = retrieved_distances[index]
-        if not isinstance(distance, (int, float)) or isinstance(distance, bool) or not math.isfinite(distance):
-            continue
-        if distance > MAX_CHROMA_DISTANCE:
+        if index >= len(retrieved_ids) or not retrieved_ids[index]:
             continue
 
         metadata = (
             retrieved_metadatas[index]
-            if index < len(retrieved_metadatas)
+            if index < len(retrieved_metadatas) and retrieved_metadatas[index]
             else {}
         )
         citations.append(
             Citation(
                 chunk_id=retrieved_ids[index],
-                document_name=_metadata_value(metadata, "source", str),
-                chunk_index=_metadata_value(metadata, "chunk_index", int, minimum=0),
-                page_number=_metadata_value(metadata, "page_number", int, minimum=1),
+                document_name=metadata.get("source"),
+                chunk_index=metadata.get("chunk_index"),
+                page_number=metadata.get("page_number"),
                 text=text,
             )
         )
 
     if not citations:
-        return _insufficient_evidence(
-            "Information not found in the available knowledge base with sufficient relevance."
+        return AnswerResponse(
+            answer="Information not found in the available knowledge base.",
+            citations=[],
+            insufficient_evidence=True,
         )
 
     context = "\n\n".join(citation.text for citation in citations)
     prompt = f"""
-Answer using ONLY the evidence in the context below. Do not use prior knowledge,
-make assumptions, or infer details that are not explicitly supported by it.
-If the context does not support an answer, say exactly:
-Information not found in the available knowledge base.
+Answer ONLY from context.
 
-Do not claim that an unsupported detail is certain. The application will attach
-citations only from the retrieved context; do not invent document names, pages,
-or citation references.
+If not found say:
+Information not found.
 
 Context:
 {context}

@@ -117,41 +117,6 @@ Citation metadata is optional when it is unavailable; the UI displays only
 fields returned by the backend and omits the sources section when there are no
 citations. With `useMock` enabled, the sample knowledge base is used instead.
 
-## Calibrating retrieval relevance
-
-`requirements.txt` pins Chroma 1.5.9. Its query results include `distances` by
-default, where smaller distance means a closer match. The default collection
-space is squared L2 (`l2`); cosine and inner-product spaces use different
-distance scales. WorkLens reads the collection's configured space and uses the
-same SentenceTransformer model to encode ingested chunks and questions. Do not
-reuse a cutoff calibrated for a different collection space or embedding model.
-
-Set `CHROMA_MAX_DISTANCE` only after measuring results from the actual indexed
-documents. It is intentionally blank in `.env-sample`; with no calibrated
-cutoff, the backend returns insufficient evidence and does not call the LLM.
-This checkout has no persistent Chroma collection, so no numeric cutoff has
-been validated here.
-
-Suggested local retrieval test plan (complete retrieval checks before evaluating
-generated answers):
-
-| Case | Question | Expected source / result |
-| :--- | :--- | :--- |
-| Direct | Ask about one specific policy statement verified in the handbook. | `Employee Handbook September 2026.pdf`, with the annotated page and supporting chunk in the results. |
-| Paraphrase | Ask about the same verified statement using different wording. | The same expected source and supporting passage appear within the top 5. |
-| Same-topic gap | Ask a plausible question about the topic whose answer is not in that passage. | No supporting evidence; the LLM is not called if no result passes the calibrated cutoff. |
-| Out of scope | Ask about a subject not covered in the indexed documents. | Insufficient evidence and no LLM call. |
-
-Before running the cases, annotate a real statement's exact page, expected
-chunk, and source text as gold evidence; do not create test facts from memory.
-For each query record distance, rank, chunk ID, document name, page, and whether
-the gold passage was retrieved. Choose a maximum distance only if it separates
-relevant from irrelevant examples on held-out questions; otherwise leave it
-unset and improve retrieval or chunking first. After retrieval passes, review
-each generated factual claim against the returned text. The service validates
-citation membership in the current retrieval only; it does not semantically
-verify answer faithfulness.
-
 ## Features in this build
 
 - Natural-language Q&A over the (sample) knowledge base
