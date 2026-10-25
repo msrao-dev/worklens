@@ -2,8 +2,10 @@ import io
 import json
 import os
 import warnings
+from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from starlette.datastructures import UploadFile as StarletteUploadFile
@@ -11,6 +13,20 @@ from starlette.formparsers import MultiPartException
 
 load_dotenv()
 
+from backend.db import (
+    get_db_connection,
+    hash_password,
+    init_db_and_seed_hr,
+    verify_password,
+)
+from backend.auth import (
+    LoginRequest,
+    RegisterRequest,
+    ResetPasswordRequest,
+    create_access_token,
+    get_current_user,
+    require_hr_user,
+)
 from backend.ingest import extract_text
 from backend.rag import (
     GroqRequestError,
@@ -22,9 +38,15 @@ from backend.rag import (
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-app = FastAPI()
 
-# Configurable CORS origins
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db_and_seed_hr()
+    yield
+
+
+app = FastAPI(lifespan=lifespan)
+
 ALLOWED_ORIGINS = os.getenv(
     "CORS_ORIGINS", 
     "http://localhost:4200,http://127.0.0.1:4200"
@@ -99,8 +121,145 @@ def health():
     return {"status": "ok"}
 
 
+# --- Auth Endpoints ---
+
+@app.post("/auth/login")
+def login(payload: LoginRequest):
+    email = payload.email.strip()
+    password = payload.password.strip()
+
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email and password are required.",
+        )
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute(
+            "SELECT id, email, pw_hash, role, is_active FROM users WHERE email = ?",
+            (email,),
+        )
+        user = cursor.fetchone()
+        if not user or not verify_password(password, user["pw_hash"]):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid email or password.",
+            )
+
+        if not user["is_active"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User account is deactivated.",
+            )
+
+        token = create_access_token({"sub": user["email"], "role": user["role"]})
+        return {
+            "access_token": token,
+            "token_type": "bearer",
+            "user": {
+                "id": user["id"],
+                "email": user["email"],
+                "role": user["role"],
+            },
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/auth/register")
+def register(payload: RegisterRequest, _current_user: dict = Depends(require_hr_user)):
+    email = payload.email.strip()
+    password = payload.password.strip()
+    role = (payload.role or "EMPLOYEE").strip().upper()
+
+    if not email or not password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email and password are required.",
+        )
+
+    if role not in ("HR", "EMPLOYEE"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Role must be either 'HR' or 'EMPLOYEE'.",
+        )
+
+    conn = get_db_connection()
+    try:
+        cursor = conn.execute("SELECT id FROM users WHERE email = ?", (email,))
+        if cursor.fetchone():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="A user with this email already exists.",
+            )
+
+        now_iso = datetime.now(timezone.utc).isoformat().split("+")[0]
+        hashed = hash_password(password)
+
+        with conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO users (email, pw_hash, role, is_active, created_on)
+                VALUES (?, ?, ?, 1, ?)
+                """,
+                (email, hashed, role, now_iso),
+            )
+            new_id = cursor.lastrowid
+
+        return {
+            "status": "success",
+            "message": "User registered successfully.",
+            "user": {
+                "id": new_id,
+                "email": email,
+                "role": role,
+            },
+        }
+    finally:
+        conn.close()
+
+
+@app.post("/auth/reset-password")
+def reset_password(
+    payload: ResetPasswordRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    new_pw = payload.new_password.strip()
+    retype_pw = payload.retype_new_password.strip()
+
+    if not new_pw or not retype_pw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Both password fields are required.",
+        )
+
+    if new_pw != retype_pw:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Passwords do not match.",
+        )
+
+    conn = get_db_connection()
+    try:
+        hashed = hash_password(new_pw)
+        with conn:
+            conn.execute(
+                "UPDATE users SET pw_hash = ? WHERE id = ?",
+                (hashed, current_user["id"]),
+            )
+        return {"status": "success", "message": "Password updated successfully."}
+    finally:
+        conn.close()
+
+
+# --- Application Endpoints ---
+
 @app.post("/ingest")
-async def ingest(file: UploadFile = File(...)):
+async def ingest(
+    file: UploadFile = File(...),
+    _current_user: dict = Depends(require_hr_user),
+):
     filepath = os.path.join(UPLOAD_DIR, file.filename)
 
     with open(filepath, "wb") as f:
@@ -123,7 +282,10 @@ async def ingest(file: UploadFile = File(...)):
 
 
 @app.post("/query")
-async def query(request: Request):
+async def query(
+    request: Request,
+    _current_user: dict = Depends(get_current_user),
+):
     images: list[tuple[bytes, str]] = []
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
     history: list[dict[str, str]] = []
@@ -214,6 +376,6 @@ async def query(request: Request):
 
 
 @app.post("/reset")
-async def reset():
+async def reset(_current_user: dict = Depends(require_hr_user)):
     reset_collection()
     return {"status": "success"}
