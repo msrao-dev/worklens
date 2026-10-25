@@ -163,6 +163,23 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     return (RELATED[id] || []).map((r) => QUESTIONS[r]);
   }
 
+  /** Gathers previous conversation turns to provide conversational context for follow-up questions. */
+  private getChatHistory(): Array<{ role: 'user' | 'assistant'; text: string }> {
+    return this.messages
+      .filter((m) => !m.typing)
+      .map((m) => {
+        if (m.role === 'user') {
+          return { role: 'user' as const, text: m.text || '' };
+        }
+        return {
+          role: 'assistant' as const,
+          text: this.plainText(m)
+        };
+      })
+      .filter((m) => m.text.trim().length > 0)
+      .slice(-6);
+  }
+
   ask(text: string, files: Attachment[] = []): void {
     text = (text || '').trim();
     if (!text && !files.length) return;
@@ -191,13 +208,20 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
     // Real API call to the FastAPI backend, unless mock data is switched on.
     if ((text || images.length) && !this.useMock) {
-      let body: object | FormData = { question: text };
+      // Exclude the current user message to retain prior dialogue context only
+      const historyPayload = this.getChatHistory().slice(0, -1);
+
+      let body: object | FormData;
       if (images.length) {
         const form = new FormData();
         form.append('question', text);
+        form.append('history', JSON.stringify(historyPayload));
         images.forEach((image) => form.append('image', image.file!, image.name));
         body = form;
+      } else {
+        body = { question: text, history: historyPayload };
       }
+
       this.http.post<{
         answer: string;
         sources: string[];
