@@ -198,7 +198,7 @@
         <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop a screenshot or image to ask about it" aria-label="Attach image or file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-        <input #fileInput type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
+        <input #fileInput type="file" multiple hidden accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
         <textarea
           [(ngModel)]="input"
           name="q"

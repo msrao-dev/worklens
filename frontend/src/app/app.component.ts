@@ -44,6 +44,7 @@ const USER_KEY = 'wl-user';
 const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES = 3;
 
 @Component({
   selector: 'app-root',
@@ -174,7 +175,8 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
     const images = files.filter((f) => f.url && f.file);
     const started = Date.now();
-    const reading = images.length ? this.readImages(images, typingMsg) : Promise.resolve('');
+    if (images.length && !this.useMock) typingMsg.status = 'Analyzing your image…';
+    const reading = images.length && this.useMock ? this.readImages(images, typingMsg) : Promise.resolve('');
     reading.then((fromImage) => {
       // Keep a short "typing" pause even when there was nothing to read.
       const wait = Math.max(0, 650 - (Date.now() - started));
@@ -185,22 +187,43 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private reply(typingMsg: Msg, text: string, files: Attachment[], hadImages: boolean, fromImage: string): void {
     const query = [text, fromImage].filter(Boolean).join(' ');
     const imageText = fromImage || undefined;
+    const images = files.filter((f) => f.url && f.file);
 
     // Real API call to the FastAPI backend, unless mock data is switched on.
-    if (query && !this.useMock) {
-      this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: query }).subscribe({
+    if ((text || images.length) && !this.useMock) {
+      let body: object | FormData = { question: text };
+      if (images.length) {
+        const form = new FormData();
+        form.append('question', text);
+        images.forEach((image) => form.append('image', image.file!, image.name));
+        body = form;
+      }
+      this.http.post<{
+        answer: string;
+        sources: string[];
+        source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+      }>(this.apiUrl, body).subscribe({
         next: (res) => {
           if (res.answer.includes('Information not found')) {
             this.push(typingMsg, this.fallbackReply(text, imageText));
             return;
           }
-          const sources: Source[] = (res.sources || []).map((doc, idx) => ({
-            title: `Document Chunk ${idx + 1}`,
-            section: 'Knowledge Base',
-            updated: '2026',
-            fresh: true,
-            passage: doc.replace(/\n/g, '<br/>')
-          }));
+          const sourceRefs = res.source_refs || [];
+          const sources: Source[] = sourceRefs.length
+            ? sourceRefs.map((source, idx) => ({
+                title: source.source || `Document Chunk ${idx + 1}`,
+                section: source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`,
+                updated: '2026',
+                fresh: true,
+                passage: source.text.replace(/\n/g, '<br/>')
+              }))
+            : (res.sources || []).map((doc, idx) => ({
+                title: `Document Chunk ${idx + 1}`,
+                section: 'Knowledge Base',
+                updated: '2026',
+                fresh: true,
+                passage: doc.replace(/\n/g, '<br/>')
+              }));
           const entry: KBEntry = {
             id: String(Date.now()),
             cat: 'Policy',
@@ -212,8 +235,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
           this.push(typingMsg, { role: 'bot', entry, q: text || query, imageText });
         },
         error: (err) => {
-          console.error('API Error:', err);
-          this.push(typingMsg, this.fallbackReply(text, imageText));
+          const detail = typeof err.error?.detail === 'string' ? err.error.detail : '';
+          this.push(typingMsg, {
+            role: 'bot',
+            note: detail || 'WorkLens could not process this query. Please try again.'
+          });
         }
       });
       return;
@@ -272,6 +298,13 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   send(): void {
     if (!this.input.trim() && !this.pending.length) return;
+    if (this.pending.some((file) => file.url) && !this.input.trim()) {
+      this.toast('Enter a question to send with your image.');
+      return;
+    }
+    if (this.input.trim() && this.pending.some((file) => !file.url)) {
+      this.toast('PDF and document attachments are not processed in chat queries; only images are sent.');
+    }
     this.ask(this.input, this.pending);
     this.input = '';
     this.pending = [];
@@ -342,6 +375,10 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private addFiles(files: FileList | null | undefined): void {
     for (const f of Array.from(files || [])) {
+      if (f.type.startsWith('image/') && this.pending.filter((item) => item.url).length >= MAX_IMAGES) {
+        this.toast('You can attach up to 3 images per question.');
+        continue;
+      }
       if (f.size > MAX_FILE_BYTES) {
         this.toast(`${f.name} is over 10 MB`);
         continue;
