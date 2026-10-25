@@ -186,8 +186,11 @@ async def query(request: Request):
 
     try:
         if images:
-            return ask_question(question.strip(), images)
-        return ask_question(question.strip())
+            response = ask_question(question.strip(), images)
+        else:
+            response = ask_question(question.strip())
+        response.setdefault("suggested_questions", [])
+        return response
     except VisionModelUnsupportedError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except LLMConfigurationError as exc:

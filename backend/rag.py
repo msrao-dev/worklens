@@ -1,5 +1,6 @@
 import os
 import base64
+import json
 import logging
 import chromadb
 import uuid
@@ -107,6 +108,52 @@ def generate_answer(prompt: str, images: list[ImageInput] | None = None) -> str:
     )
     return response.message.content
 
+
+def generate_suggested_questions(question: str, answer: str, context: str) -> list[str]:
+    prompt = f"""
+Suggest 3 or 4 concise follow-up questions for the user.
+
+Use only information explicitly present in the retrieved context. Questions must be
+relevant to the user's question and answer, and must not assume or introduce company
+policies or facts. If the context does not support useful follow-up questions, return [].
+Return only a JSON array of strings, with no markdown or additional text.
+
+Retrieved context:
+{context}
+
+User's question:
+{question}
+
+Answer:
+{answer}
+"""
+    output = generate_answer(prompt)
+    try:
+        suggestions = json.loads(output)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("Suggested-question generation returned invalid JSON.")
+        return []
+
+    if not isinstance(suggestions, list) or not 3 <= len(suggestions) <= 4:
+        logger.warning("Suggested-question generation returned an invalid number of questions.")
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for suggestion in suggestions:
+        if not isinstance(suggestion, str):
+            logger.warning("Suggested-question generation returned a non-string question.")
+            return []
+        text = suggestion.strip()
+        key = text.casefold()
+        if not text or len(text) > 120 or not text.endswith("?") or key in seen:
+            logger.warning("Suggested-question generation returned an invalid question.")
+            return []
+        normalized.append(text)
+        seen.add(key)
+    return normalized
+
+
 def store_chunks(chunks, filename="doc"):
     embeddings = MODEL.encode(chunks).tolist()
 
@@ -132,11 +179,26 @@ def ask_question(question: str, images: list[ImageInput] | None = None):
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=5
+        n_results=5,
+        include=["documents", "metadatas", "distances"],
     )
 
     docs = results["documents"][0] if results["documents"] else []
-    context = "\n\n".join(docs)
+    distance_results = results.get("distances")
+    distances = distance_results[0] if distance_results else []
+    context = "\n\n".join(
+        f"Retrieved passage {index + 1}:\n{doc}"
+        for index, doc in enumerate(docs)
+    )
+    for index, doc in enumerate(docs):
+        distance = distances[index] if index < len(distances) else None
+        logger.info(
+            "Chroma result rank=%d distance=%s characters=%d",
+            index + 1,
+            distance,
+            len(doc),
+        )
+
     metadatas = results.get("metadatas") or [[]]
     metadata = metadatas[0] if metadatas and metadatas[0] else []
     source_refs = []
@@ -152,10 +214,12 @@ def ask_question(question: str, images: list[ImageInput] | None = None):
         prompt = f"""
 Answer the user's question using both the image and the retrieved handbook context.
 
-Company policy claims must be supported by the retrieved context. The image may support
-visual observations, but it is not evidence of company policy. Clearly distinguish visual
-observations from policy evidence. If the retrieved context does not answer a policy
-question, say: Information not found.
+Read all retrieved passages; the retrieval order does not mean that later passages are
+irrelevant. If any passage supports an answer, answer from it. Company policy claims must
+be supported by the retrieved context. The image may support visual observations, but it
+is not evidence of company policy. Clearly distinguish visual observations from policy
+evidence. Only if none of the retrieved passages contains relevant information, respond
+exactly: Information not found.
 
 Retrieved context:
 {context}
@@ -165,12 +229,15 @@ Question:
 """
     else:
         prompt = f"""
-Answer ONLY from context.
+Answer using the retrieved passages below. Read all passages; the retrieval order does not
+mean that later passages are irrelevant. If any passage supports an answer, answer from
+that information and do not reject it merely because other passages are unrelated. Do not
+infer company policy beyond what the passages state.
 
-If not found say:
-Information not found.
+Only if none of the passages contains information relevant to the question, respond
+exactly: Information not found.
 
-Context:
+Retrieved context:
 {context}
 
 Question:
@@ -178,11 +245,17 @@ Question:
 """
 
     answer_text = generate_answer(prompt, images) if images else generate_answer(prompt)
+    try:
+        suggested_questions = generate_suggested_questions(question, answer_text, context)
+    except Exception:
+        logger.exception("Could not generate suggested questions.")
+        suggested_questions = []
 
     return {
         "answer": answer_text,
         "sources": docs,
         "source_refs": source_refs,
+        "suggested_questions": suggested_questions,
     }
 
 def reset_collection():

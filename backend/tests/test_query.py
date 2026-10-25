@@ -1,6 +1,7 @@
 import base64
 import importlib
 import io
+import json
 import sys
 import types
 import unittest
@@ -29,6 +30,7 @@ class _Collection:
         return {
             "documents": [["Approved leave policy: 20 days per year."]],
             "metadatas": [[{"source": "Employee Handbook.pdf", "chunk_index": 4}]],
+            "distances": [[0.12]],
         }
 
 
@@ -108,6 +110,94 @@ def _groq_mock(failure=None):
 
 
 class QueryEndpointTests(unittest.TestCase):
+    def test_leave_encashment_answer_uses_retrieved_handbook_context(self):
+        relevant_chunk = (
+            "Accumulated unused leave may be encashed at the employee's last drawn "
+            "monthly basic salary."
+        )
+        collection = types.SimpleNamespace(query=lambda **_kwargs: {
+            "documents": [[relevant_chunk]],
+            "metadatas": [[{"source": "Employee Handbook.pdf", "chunk_index": 18}]],
+            "distances": [[0.31]],
+        })
+        with patch.object(rag, "collection", collection), \
+                patch.object(
+                    rag,
+                    "generate_answer",
+                    return_value=(
+                        "Accumulated unused leave is encashed based on the last drawn "
+                        "monthly basic salary."
+                    ),
+                ) as generate, \
+                patch.object(rag, "generate_suggested_questions", return_value=[]):
+            response = client.post("/query", json={"question": "How does leave encashment work?"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["answer"],
+            "Accumulated unused leave is encashed based on the last drawn monthly basic salary.",
+        )
+        self.assertIn(relevant_chunk, generate.call_args.args[0])
+        self.assertIn("If any passage supports an answer", generate.call_args.args[0])
+
+    def test_unrelated_query_with_no_retrieved_context_returns_explicit_fallback(self):
+        collection = types.SimpleNamespace(query=lambda **_kwargs: {
+            "documents": [[]],
+            "metadatas": [[]],
+            "distances": [[]],
+        })
+        with patch.object(rag, "collection", collection), \
+                patch.object(rag, "generate_answer", return_value="Information not found.") as generate, \
+                patch.object(rag, "generate_suggested_questions", return_value=[]):
+            response = client.post("/query", json={"question": "What is the capital of France?"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], "Information not found.")
+        self.assertEqual(response.json()["sources"], [])
+        self.assertIn("Only if none of the passages contains information relevant", generate.call_args.args[0])
+
+    def test_relevant_chunk_ranked_below_unrelated_chunks_is_included_in_context(self):
+        relevant_chunk = (
+            "Accumulated leave is encashed on the last drawn monthly basic salary."
+        )
+        documents = [
+            "General attendance guidelines.",
+            "Office opening hours and access information.",
+            "Guidance for submitting expense claims.",
+            "Instructions for requesting equipment.",
+            relevant_chunk,
+        ]
+        distances = [[0.04, 0.08, 0.11, 0.16, 0.22]]
+        collection = types.SimpleNamespace(query=lambda **_kwargs: {
+            "documents": [documents],
+            "metadatas": [[{"source": "Handbook.pdf", "chunk_index": i} for i in range(5)]],
+            "distances": distances,
+        })
+        with patch.object(rag, "collection", collection), \
+                patch.object(rag, "generate_answer", return_value="It uses the last drawn monthly basic salary.") as generate, \
+                patch.object(rag, "generate_suggested_questions", return_value=[]), \
+                self.assertLogs(rag.logger, level="INFO") as captured:
+            result = rag.ask_question("How does leave encashment work?")
+
+        prompt = generate.call_args.args[0]
+        self.assertIn(relevant_chunk, prompt)
+        self.assertIn("Retrieved passage 5:", prompt)
+        self.assertEqual(result["sources"], documents)
+        self.assertTrue(any("rank=5 distance=0.22" in line for line in captured.output))
+        self.assertFalse(any(relevant_chunk in line for line in captured.output))
+
+    def test_valid_answer_containing_fallback_phrase_is_returned_unchanged(self):
+        answer = (
+            "The handbook says unused leave is encashed at the last drawn monthly basic "
+            "salary. “Information not found” applies only when no relevant passage exists."
+        )
+        with patch.object(rag, "generate_answer", return_value=answer), \
+                patch.object(rag, "generate_suggested_questions", return_value=[]):
+            response = client.post("/query", json={"question": "How does leave encashment work?"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], answer)
+
     def test_text_only_json_query_preserves_existing_response_shape(self):
         with patch.object(
             api,
@@ -119,9 +209,60 @@ class QueryEndpointTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(
             response.json(),
-            {"answer": "Twenty days.", "sources": ["Policy passage"]},
+            {
+                "answer": "Twenty days.",
+                "sources": ["Policy passage"],
+                "suggested_questions": [],
+            },
         )
         ask.assert_called_once_with("How many leave days?")
+
+    def test_query_returns_context_grounded_suggested_questions(self):
+        suggestions = [
+            "How many leave days are provided each year?",
+            "What is the annual leave allowance?",
+            "Does the policy state an allowance of 20 days?",
+        ]
+        with patch.object(
+            rag,
+            "generate_answer",
+            side_effect=["Twenty days per year.", json.dumps(suggestions)],
+        ) as generate:
+            response = client.post("/query", json={"question": "How many leave days?"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], "Twenty days per year.")
+        self.assertEqual(response.json()["sources"], ["Approved leave policy: 20 days per year."])
+        self.assertEqual(response.json()["suggested_questions"], suggestions)
+        self.assertEqual(generate.call_count, 2)
+        suggestion_prompt = generate.call_args.args[0]
+        self.assertIn("How many leave days?", suggestion_prompt)
+        self.assertIn("Twenty days per year.", suggestion_prompt)
+        self.assertIn("Approved leave policy: 20 days per year.", suggestion_prompt)
+        self.assertIn("only information explicitly present", suggestion_prompt)
+
+    def test_suggestion_generation_failure_preserves_answer_and_sources(self):
+        with patch.object(
+            rag,
+            "generate_answer",
+            side_effect=["Twenty days per year.", RuntimeError("provider unavailable")],
+        ):
+            result = rag.ask_question("How many leave days?")
+
+        self.assertEqual(result["answer"], "Twenty days per year.")
+        self.assertEqual(result["sources"], ["Approved leave policy: 20 days per year."])
+        self.assertEqual(result["suggested_questions"], [])
+
+    def test_invalid_suggestion_output_returns_empty_array(self):
+        with patch.object(
+            rag,
+            "generate_answer",
+            side_effect=["Twenty days per year.", '["Only one question?"]'],
+        ):
+            result = rag.ask_question("How many leave days?")
+
+        self.assertEqual(result["answer"], "Twenty days per year.")
+        self.assertEqual(result["suggested_questions"], [])
 
     def test_text_only_query_uses_existing_rag_context_and_groq_text_format(self):
         with _groq_mock() as requests, \
