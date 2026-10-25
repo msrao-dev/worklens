@@ -1,6 +1,7 @@
 import os
 import base64
 import logging
+import re
 import chromadb
 import uuid
 from sentence_transformers import SentenceTransformer
@@ -26,6 +27,11 @@ collection = client.get_or_create_collection("employee_docs")
 
 ImageInput = tuple[bytes, str]
 
+GREETING_PATTERN = re.compile(
+    r"^\s*(hi|hello|hey|good\s+(morning|afternoon|evening)|greetings|howdy|hi\s+there|hello\s+there)[!.,\s]*$",
+    re.IGNORECASE,
+)
+
 
 class LLMConfigurationError(Exception):
     pass
@@ -37,6 +43,11 @@ class VisionModelUnsupportedError(Exception):
 
 class GroqRequestError(Exception):
     pass
+
+
+def is_greeting(text: str) -> bool:
+    """Checks if the user input is a pure greeting or polite conversational opening."""
+    return bool(GREETING_PATTERN.match(text.strip()))
 
 
 def generate_answer(prompt: str, images: list[ImageInput] | None = None) -> str:
@@ -73,7 +84,7 @@ def generate_answer(prompt: str, images: list[ImageInput] | None = None) -> str:
             completion = groq_client.chat.completions.create(
                 model=GROQ_MODEL_NAME,
                 messages=[{"role": "user", "content": content}],
-                temperature=0.2
+                temperature=0.3,
             )
         except APIError as exc:
             status_code = getattr(exc, "status_code", None)
@@ -96,16 +107,18 @@ def generate_answer(prompt: str, images: list[ImageInput] | None = None) -> str:
 
     # Default: Ollama
     from ollama import chat
+
     response = chat(
         model=OLLAMA_MODEL_NAME,
         messages=[
             {
                 "role": "user",
-                "content": prompt
+                "content": prompt,
             }
-        ]
+        ],
     )
     return response.message.content
+
 
 def store_chunks(chunks, filename="doc"):
     embeddings = MODEL.encode(chunks).tolist()
@@ -124,15 +137,34 @@ def store_chunks(chunks, filename="doc"):
         ids=ids,
         documents=chunks,
         embeddings=embeddings,
-        metadatas=metadatas
+        metadatas=metadatas,
     )
 
+
 def ask_question(question: str, images: list[ImageInput] | None = None):
+    # Handle pure greetings dynamically via the LLM without searching vector DB
+    if not images and is_greeting(question):
+        greeting_prompt = f"""
+You are WorkLens, an enterprise employee knowledge assistant.
+The employee greeted you with: "{question}".
+
+Respond professionally, warmly, and concisely (1 to 2 sentences).
+Acknowledge the greeting courteously and proactively guide the user to ask any questions they have regarding the company employee handbook, such as leave policies, benefits, code of conduct, onboarding, IT assets, or reimbursement procedures.
+Do not invent company policies. Keep the tone courteous, helpful, and professional.
+"""
+        model_reply = generate_answer(greeting_prompt)
+        return {
+            "answer": model_reply,
+            "sources": [],
+            "source_refs": [],
+            "is_greeting": True,
+        }
+
     query_embedding = MODEL.encode(question).tolist()
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=5
+        n_results=5,
     )
 
     docs = results["documents"][0] if results["documents"] else []
@@ -165,9 +197,9 @@ Question:
 """
     else:
         prompt = f"""
-Answer ONLY from context.
+Answer ONLY from the retrieved context.
 
-If not found say:
+If the answer is not present in the context, say:
 Information not found.
 
 Context:
@@ -183,7 +215,9 @@ Question:
         "answer": answer_text,
         "sources": docs,
         "source_refs": source_refs,
+        "is_greeting": False,
     }
+
 
 def reset_collection():
     global collection

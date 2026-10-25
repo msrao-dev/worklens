@@ -202,12 +202,24 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         answer: string;
         sources: string[];
         source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+        is_greeting?: boolean;
       }>(this.apiUrl, body).subscribe({
         next: (res) => {
-          if (res.answer.includes('Information not found')) {
+          if (!res.is_greeting && res.answer.includes('Information not found')) {
             this.push(typingMsg, this.fallbackReply(text, imageText));
             return;
           }
+
+          // Greeting or direct model conversational guidance
+          if (res.is_greeting) {
+            this.push(typingMsg, {
+              role: 'bot',
+              note: res.answer,
+              followups: POPULAR.map((id) => QUESTIONS[id])
+            });
+            return;
+          }
+
           const sourceRefs = res.source_refs || [];
           const sources: Source[] = sourceRefs.length
             ? sourceRefs.map((source, idx) => ({
@@ -241,6 +253,16 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             note: detail || 'WorkLens could not process this query. Please try again.'
           });
         }
+      });
+      return;
+    }
+
+    const isGreetingMock = /^(hi|hello|hey|good\s+(morning|afternoon|evening))\b/i.test(query.trim());
+    if (isGreetingMock) {
+      this.push(typingMsg, {
+        role: 'bot',
+        note: 'Hello! I am your WorkLens assistant. How can I assist you with the employee handbook, leave policy, or workplace benefits today?',
+        followups: POPULAR.map((id) => QUESTIONS[id])
       });
       return;
     }

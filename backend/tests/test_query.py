@@ -31,6 +31,12 @@ class _Collection:
             "metadatas": [[{"source": "Employee Handbook.pdf", "chunk_index": 4}]],
         }
 
+    def get_or_create_collection(self, _name):
+        return self
+
+    def delete_collection(self, _name):
+        pass
+
 
 class _ChromaClient:
     def get_or_create_collection(self, _name):
@@ -71,7 +77,7 @@ def _png_bytes():
 
 
 @contextmanager
-def _groq_mock(failure=None):
+def _groq_mock(failure=None, custom_content="The image shows a leave balance."):
     requests = []
 
     class FakeAPIError(Exception):
@@ -86,7 +92,7 @@ def _groq_mock(failure=None):
             model="qwen/qwen3.8-27b",
             choices=[
                 types.SimpleNamespace(
-                    message=types.SimpleNamespace(content="The image shows a leave balance.")
+                    message=types.SimpleNamespace(content=custom_content)
                 )
             ],
         )
@@ -122,6 +128,21 @@ class QueryEndpointTests(unittest.TestCase):
             {"answer": "Twenty days.", "sources": ["Policy passage"]},
         )
         ask.assert_called_once_with("How many leave days?")
+
+    def test_greeting_routes_directly_to_llm_and_returns_nudge(self):
+        with _groq_mock(custom_content="Hello! How can I assist you with the handbook today?") as requests, \
+                patch.object(rag, "GROQ_MODEL_NAME", "qwen/qwen3.8-27b"):
+            response = client.post("/query", json={"question": "Hello"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["answer"],
+            "Hello! How can I assist you with the handbook today?",
+        )
+        self.assertEqual(response.json()["sources"], [])
+        self.assertEqual(response.json()["source_refs"], [])
+        self.assertTrue(response.json()["is_greeting"])
+        self.assertIn("employee handbook", requests[0]["messages"][0]["content"])
 
     def test_text_only_query_uses_existing_rag_context_and_groq_text_format(self):
         with _groq_mock() as requests, \
