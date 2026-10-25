@@ -226,7 +226,7 @@
 <!-- Follow-up questions under a reply -->
 <ng-template #followupsTpl let-m>
   <div class="followups" *ngIf="m.followups?.length">
-    <div class="followups-h">{{ m.fallback ? 'Try asking' : 'Related questions' }}</div>
+    <div class="followups-h">Try asking</div>
     <div class="followups-list">
       <button class="followup" *ngFor="let f of m.followups; trackBy: trackByIndex" (click)="ask(f)">{{ f }}</button>
     </div>

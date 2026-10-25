@@ -226,11 +226,16 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         answer: string;
         sources: string[];
         source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+        suggested_questions?: string[];
         is_greeting?: boolean;
       }>(this.apiUrl, body).subscribe({
         next: (res) => {
-          if (!res.is_greeting && res.answer.includes('Information not found')) {
-            this.push(typingMsg, this.fallbackReply(text, imageText));
+          const suggestedQuestions = Array.isArray(res.suggested_questions)
+            ? res.suggested_questions.filter((question) => typeof question === 'string' && !!question.trim())
+            : [];
+
+          if (!res.is_greeting && /^Information not found\.?$/i.test(res.answer.trim())) {
+            this.push(typingMsg, this.fallbackReply(text, imageText, suggestedQuestions));
             return;
           }
 
@@ -239,7 +244,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             this.push(typingMsg, {
               role: 'bot',
               note: res.answer,
-              followups: POPULAR.map((id) => QUESTIONS[id])
+              followups: suggestedQuestions.length ? suggestedQuestions : POPULAR.map((id) => QUESTIONS[id])
             });
             return;
           }
@@ -268,7 +273,13 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
             sources
           };
-          this.push(typingMsg, { role: 'bot', entry, q: text || query, imageText });
+          this.push(typingMsg, {
+            role: 'bot',
+            entry,
+            q: text || query,
+            imageText,
+            followups: suggestedQuestions
+          });
         },
         error: (err) => {
           const detail = typeof err.error?.detail === 'string' ? err.error.detail : '';
@@ -308,8 +319,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     this.push(typingMsg, reply);
   }
 
-  private fallbackReply(text: string, imageText?: string): Msg {
-    return { role: 'bot', fallback: true, q: text, imageText, followups: POPULAR.map((id) => QUESTIONS[id]) };
+  private fallbackReply(text: string, imageText?: string, followups?: string[]): Msg {
+    return {
+      role: 'bot',
+      fallback: true,
+      q: text,
+      imageText,
+      followups: followups && followups.length ? followups : POPULAR.map((id) => QUESTIONS[id])
+    };
   }
 
   /** Replace the typing indicator with the reply. */

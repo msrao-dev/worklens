@@ -202,7 +202,9 @@ async def query(request: Request):
         raise HTTPException(status_code=422, detail="A non-empty question is required.")
 
     try:
-        return ask_question(question.strip(), images if images else None, history=history)
+        response = ask_question(question.strip(), images if images else None, history=history)
+        response.setdefault("suggested_questions", [])
+        return response
     except VisionModelUnsupportedError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except LLMConfigurationError as exc:
