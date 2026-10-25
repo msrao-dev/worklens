@@ -46,8 +46,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
       <div class="top-title">Knowledge Assistant</div>
-      <span class="demo-badge">Demo · sample data</span>
-      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.name }}</b> · Bengaluru · Engineering</div>
+      <span class="demo-badge">{{ user.role }}</span>
+      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.email }}</b> ({{ user.role }})</div>
     </div>
 
     <div class="stream" #stream>
@@ -97,11 +97,11 @@
               <ng-container *ngIf="m.entry as e">
                 <div class="ctx-line">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
-                  Answered for Engineering · Bengaluru
+                  Answered for {{ user.role }} · Bengaluru
                 </div>
                 <div class="answer" [innerHTML]="e.answer | safeHtml"></div>
 
-                <div class="sources">
+                <div class="sources" *ngIf="e.sources?.length">
                   <div class="sources-h">Sources · {{ e.sources.length }}</div>
                   <button class="src" *ngFor="let s of e.sources; trackBy: trackByIndex" (click)="openDoc(s)">
                     <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
@@ -173,6 +173,7 @@
                     <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
                   </div>
                 </div>
+                <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
               </ng-container>
             </div>
           </div>
@@ -226,7 +227,7 @@
 <!-- Follow-up questions under a reply -->
 <ng-template #followupsTpl let-m>
   <div class="followups" *ngIf="m.followups?.length">
-    <div class="followups-h">Try asking</div>
+    <div class="followups-h">{{ m.fallback ? 'Try asking' : 'Related questions' }}</div>
     <div class="followups-list">
       <button class="followup" *ngFor="let f of m.followups; trackBy: trackByIndex" (click)="ask(f)">{{ f }}</button>
     </div>

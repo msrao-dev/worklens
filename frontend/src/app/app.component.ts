@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
@@ -131,7 +131,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private loadUser(): User | null {
     try {
       const u = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-      return u?.email ? u : null;
+      return u && u.token ? u : null;
     } catch {
       return null;
     }
@@ -222,13 +222,17 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         body = { question: text, history: historyPayload };
       }
 
+      const headers = new HttpHeaders({
+        Authorization: `Bearer ${this.user?.token || ''}`
+      });
+
       this.http.post<{
         answer: string;
         sources: string[];
         source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
         suggested_questions?: string[];
         is_greeting?: boolean;
-      }>(this.apiUrl, body).subscribe({
+      }>(this.apiUrl, body, { headers }).subscribe({
         next: (res) => {
           const suggestedQuestions = Array.isArray(res.suggested_questions)
             ? res.suggested_questions.filter((question) => typeof question === 'string' && !!question.trim())
@@ -282,6 +286,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
           });
         },
         error: (err) => {
+          if (err.status === 401) {
+            this.logout();
+            this.toast('Session expired. Please sign in again.');
+            return;
+          }
           const detail = typeof err.error?.detail === 'string' ? err.error.detail : '';
           this.push(typingMsg, {
             role: 'bot',

@@ -1,15 +1,17 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, EventEmitter, Output, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { HttpClient } from '@angular/common/http';
+import { environment } from '../environments/environment';
 
 export interface User {
+  id?: number;
   name: string;
   email: string;
+  role: 'HR' | 'EMPLOYEE';
+  token?: string;
 }
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** Demo sign-in screen. There is no auth backend yet, so any valid email and password is accepted. */
 @Component({
   selector: 'app-login',
   standalone: true,
@@ -30,8 +32,8 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         <p class="login-sub">Use your work account to access the knowledge assistant.</p>
 
         <label for="wl-email">Work email</label>
-        <input id="wl-email" name="email" type="email" autocomplete="username" [(ngModel)]="email"
-          placeholder="name@company.com" [class.invalid]="error && !emailValid" />
+        <input id="wl-email" name="email" type="text" autocomplete="username" [(ngModel)]="email"
+          placeholder="name@company.com" [class.invalid]="error && !email.trim()" />
 
         <label for="wl-password">Password</label>
         <div class="pw">
@@ -43,7 +45,6 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         <div class="login-error" *ngIf="error" role="alert">{{ error }}</div>
 
         <button class="login-btn" type="submit" [disabled]="busy">{{ busy ? 'Signing in…' : 'Sign in' }}</button>
-        <div class="login-hint">Demo · any work email and password will sign you in</div>
       </form>
     </div>
   `
@@ -57,31 +58,50 @@ export class LoginComponent {
   busy = false;
   error = '';
 
-  get emailValid(): boolean {
-    return EMAIL_RE.test(this.email.trim());
-  }
+  private http = inject(HttpClient);
+  private authUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/auth/login';
 
   submit(): void {
-    if (!this.emailValid) {
-      this.error = 'Enter a valid work email.';
+    const emailVal = this.email.trim();
+    if (!emailVal) {
+      this.error = 'Enter your work email or identifier.';
       return;
     }
     if (!this.password) {
       this.error = 'Enter your password.';
       return;
     }
+
     this.error = '';
     this.busy = true;
-    const email = this.email.trim().toLowerCase();
-    // Brief delay so the sign-in feels like a real request.
-    setTimeout(() => this.loggedIn.emit({ email, name: nameFromEmail(email) }), 400);
+
+    this.http.post<{ access_token: string; token_type: string; user: { id: number; email: string; role: 'HR' | 'EMPLOYEE' } }>(
+      this.authUrl,
+      { email: emailVal, password: this.password }
+    ).subscribe({
+      next: (res) => {
+        this.busy = false;
+        const loggedUser: User = {
+          id: res.user.id,
+          email: res.user.email,
+          name: nameFromEmail(res.user.email),
+          role: res.user.role,
+          token: res.access_token
+        };
+        this.loggedIn.emit(loggedUser);
+      },
+      error: (err) => {
+        this.busy = false;
+        const detail = err.error?.detail;
+        this.error = typeof detail === 'string' ? detail : 'Unable to sign in. Verify your credentials.';
+      }
+    });
   }
 }
 
-/** "meera.shetty@acme.com" -> "Meera Shetty" */
 function nameFromEmail(email: string): string {
-  return email
-    .split('@')[0]
+  const local = email.split('@')[0] || email;
+  return local
     .split(/[._-]+/)
     .filter(Boolean)
     .map((p) => p[0].toUpperCase() + p.slice(1))
