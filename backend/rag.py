@@ -84,7 +84,7 @@ def generate_answer(prompt: str, images: list[ImageInput] | None = None) -> str:
             completion = groq_client.chat.completions.create(
                 model=GROQ_MODEL_NAME,
                 messages=[{"role": "user", "content": content}],
-                temperature=0.3,
+                temperature=0.2,
             )
         except APIError as exc:
             status_code = getattr(exc, "status_code", None)
@@ -182,31 +182,36 @@ Do not invent company policies. Keep the tone courteous, helpful, and profession
 
     if images:
         prompt = f"""
-Answer the user's question using both the image and the retrieved handbook context.
+You are WorkLens, an enterprise knowledge assistant answering queries based on company policy documents.
 
-Company policy claims must be supported by the retrieved context. The image may support
-visual observations, but it is not evidence of company policy. Clearly distinguish visual
-observations from policy evidence. If the retrieved context does not answer a policy
-question, say: Information not found.
-
-Retrieved context:
+Retrieved Context:
 {context}
 
 Question:
 {question}
+
+Instructions:
+1. Answer the question using the retrieved context and any provided images.
+2. Company policy claims must be grounded in the retrieved context. If specific details (e.g. daily-rate formulas) are not fully stated in the text, present all relevant rules, bases (e.g., basic salary), and limits mentioned in the context, and note what remains unspecified.
+3. Distinguish visual observations from official policy statements.
+4. Only return "Information not found." if the retrieved context is completely irrelevant to the question.
 """
     else:
         prompt = f"""
-Answer ONLY from the retrieved context.
+You are WorkLens, an enterprise knowledge assistant answering queries based on company policy documents.
 
-If the answer is not present in the context, say:
-Information not found.
-
-Context:
+Retrieved Context:
 {context}
 
 Question:
 {question}
+
+Instructions:
+1. Answer the question based on the retrieved context above.
+2. Synthesize all pertinent rules, eligibility conditions, calculation bases (e.g., basic salary vs. allowances), and caps given in the text.
+3. If an exact mathematical formula is not explicitly detailed in the text, explain the calculation rules that ARE provided (e.g., carryover thresholds, maximum encashable days, pay components) and state clearly if any granular divisor or formula detail is not mentioned.
+4. Do not invent unmentioned terms or policies.
+5. Only return "Information not found." if the retrieved context contains no relevant information to address the question.
 """
 
     answer_text = generate_answer(prompt, images) if images else generate_answer(prompt)
