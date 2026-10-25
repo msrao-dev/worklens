@@ -163,6 +163,23 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     return (RELATED[id] || []).map((r) => QUESTIONS[r]);
   }
 
+  /** Gathers previous conversation turns to provide conversational context for follow-up questions. */
+  private getChatHistory(): Array<{ role: 'user' | 'assistant'; text: string }> {
+    return this.messages
+      .filter((m) => !m.typing)
+      .map((m) => {
+        if (m.role === 'user') {
+          return { role: 'user' as const, text: m.text || '' };
+        }
+        return {
+          role: 'assistant' as const,
+          text: this.plainText(m)
+        };
+      })
+      .filter((m) => m.text.trim().length > 0)
+      .slice(-6);
+  }
+
   ask(text: string, files: Attachment[] = []): void {
     text = (text || '').trim();
     if (!text && !files.length) return;
@@ -191,27 +208,47 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
     // Real API call to the FastAPI backend, unless mock data is switched on.
     if ((text || images.length) && !this.useMock) {
-      let body: object | FormData = { question: text };
+      // Exclude the current user message to retain prior dialogue context only
+      const historyPayload = this.getChatHistory().slice(0, -1);
+
+      let body: object | FormData;
       if (images.length) {
         const form = new FormData();
         form.append('question', text);
+        form.append('history', JSON.stringify(historyPayload));
         images.forEach((image) => form.append('image', image.file!, image.name));
         body = form;
+      } else {
+        body = { question: text, history: historyPayload };
       }
+
       this.http.post<{
         answer: string;
         sources: string[];
         source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
         suggested_questions?: string[];
+        is_greeting?: boolean;
       }>(this.apiUrl, body).subscribe({
         next: (res) => {
           const suggestedQuestions = Array.isArray(res.suggested_questions)
             ? res.suggested_questions.filter((question) => typeof question === 'string' && !!question.trim())
             : [];
-          if (/^Information not found\.?$/i.test(res.answer.trim())) {
+
+          if (!res.is_greeting && /^Information not found\.?$/i.test(res.answer.trim())) {
             this.push(typingMsg, this.fallbackReply(text, imageText, suggestedQuestions));
             return;
           }
+
+          // Greeting or direct model conversational guidance
+          if (res.is_greeting) {
+            this.push(typingMsg, {
+              role: 'bot',
+              note: res.answer,
+              followups: suggestedQuestions.length ? suggestedQuestions : POPULAR.map((id) => QUESTIONS[id])
+            });
+            return;
+          }
+
           const sourceRefs = res.source_refs || [];
           const sources: Source[] = sourceRefs.length
             ? sourceRefs.map((source, idx) => ({
@@ -255,6 +292,16 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       return;
     }
 
+    const isGreetingMock = /^(hi|hello|hey|good\s+(morning|afternoon|evening))\b/i.test(query.trim());
+    if (isGreetingMock) {
+      this.push(typingMsg, {
+        role: 'bot',
+        note: 'Hello! I am your WorkLens assistant. How can I assist you with the employee handbook, leave policy, or workplace benefits today?',
+        followups: POPULAR.map((id) => QUESTIONS[id])
+      });
+      return;
+    }
+
     const e = query ? this.match(query) : null;
     let reply: Msg;
     if (e) {
@@ -278,7 +325,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       fallback: true,
       q: text,
       imageText,
-      followups: followups ?? POPULAR.map((id) => QUESTIONS[id])
+      followups: followups && followups.length ? followups : POPULAR.map((id) => QUESTIONS[id])
     };
   }
 

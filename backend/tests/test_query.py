@@ -33,6 +33,12 @@ class _Collection:
             "distances": [[0.12]],
         }
 
+    def get_or_create_collection(self, _name):
+        return self
+
+    def delete_collection(self, _name):
+        pass
+
 
 class _ChromaClient:
     def get_or_create_collection(self, _name):
@@ -73,7 +79,7 @@ def _png_bytes():
 
 
 @contextmanager
-def _groq_mock(failure=None):
+def _groq_mock(failure=None, custom_content="The image shows a leave balance."):
     requests = []
 
     class FakeAPIError(Exception):
@@ -88,7 +94,7 @@ def _groq_mock(failure=None):
             model="qwen/qwen3.8-27b",
             choices=[
                 types.SimpleNamespace(
-                    message=types.SimpleNamespace(content="The image shows a leave balance.")
+                    message=types.SimpleNamespace(content=custom_content)
                 )
             ],
         )
@@ -215,7 +221,22 @@ class QueryEndpointTests(unittest.TestCase):
                 "suggested_questions": [],
             },
         )
-        ask.assert_called_once_with("How many leave days?")
+        ask.assert_called_once_with("How many leave days?", None, history=[])
+
+    def test_greeting_routes_directly_to_llm_and_returns_nudge(self):
+        with _groq_mock(custom_content="Hello! How can I assist you with the handbook today?") as requests, \
+                patch.object(rag, "GROQ_MODEL_NAME", "qwen/qwen3.8-27b"):
+            response = client.post("/query", json={"question": "Hello"})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()["answer"],
+            "Hello! How can I assist you with the handbook today?",
+        )
+        self.assertEqual(response.json()["sources"], [])
+        self.assertEqual(response.json()["source_refs"], [])
+        self.assertTrue(response.json()["is_greeting"])
+        self.assertIn("employee handbook", requests[0]["messages"][0]["content"])
 
     def test_query_returns_context_grounded_suggested_questions(self):
         suggestions = [
@@ -282,6 +303,25 @@ class QueryEndpointTests(unittest.TestCase):
         message_content = requests[0]["messages"][0]["content"]
         self.assertIsInstance(message_content, str)
         self.assertIn("Approved leave policy: 20 days per year.", message_content)
+
+    def test_query_with_history_passes_turns_and_contextualizes(self):
+        history = [
+            {"role": "user", "text": "tell me calculation for encashment for earned leaves"},
+            {"role": "assistant", "text": "Encashment is calculated on basic pay."},
+        ]
+        with _groq_mock(custom_content="Here is the TLDR on leave encashment.") as requests, \
+                patch.object(rag, "GROQ_MODEL_NAME", "qwen/qwen3.8-27b"):
+            response = client.post(
+                "/query",
+                json={"question": "give me TLDR", "history": history},
+            )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["answer"], "Here is the TLDR on leave encashment.")
+        # At least one request was made to contextualize or generate with history
+        final_prompt = requests[-1]["messages"][0]["content"]
+        self.assertIn("Recent Conversation History:", final_prompt)
+        self.assertIn("tell me calculation for encashment for earned leaves", final_prompt)
 
     def test_valid_image_query_sends_image_and_retrieved_context_to_groq(self):
         image_bytes = _png_bytes()

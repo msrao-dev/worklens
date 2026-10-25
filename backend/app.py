@@ -93,9 +93,11 @@ def root():
         "swagger": "/docs"
     }
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
 
 @app.post("/ingest")
 async def ingest(file: UploadFile = File(...)):
@@ -119,10 +121,12 @@ async def ingest(file: UploadFile = File(...)):
         "chunks": len(chunks)
     }
 
+
 @app.post("/query")
 async def query(request: Request):
     images: list[tuple[bytes, str]] = []
     content_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+    history: list[dict[str, str]] = []
 
     if content_type == "application/json":
         try:
@@ -132,11 +136,15 @@ async def query(request: Request):
         if not isinstance(body, dict):
             raise HTTPException(status_code=400, detail="The query body must be a JSON object.")
         question = body.get("question")
+        history_raw = body.get("history")
+        if isinstance(history_raw, list):
+            history = [h for h in history_raw if isinstance(h, dict) and "text" in h and "role" in h]
+
     elif content_type == "multipart/form-data":
         try:
             form = await request.form(
                 max_files=MAX_IMAGES,
-                max_fields=1,
+                max_fields=5,
                 max_part_size=64 * 1024,
             )
         except (MultiPartException, ValueError):
@@ -144,6 +152,15 @@ async def query(request: Request):
 
         try:
             question = form.get("question")
+            history_field = form.get("history")
+            if history_field:
+                try:
+                    parsed_history = json.loads(str(history_field))
+                    if isinstance(parsed_history, list):
+                        history = [h for h in parsed_history if isinstance(h, dict) and "text" in h and "role" in h]
+                except Exception:
+                    history = []
+
             uploads = []
             for field_name, value in form.multi_items():
                 if isinstance(value, StarletteUploadFile):
@@ -185,10 +202,7 @@ async def query(request: Request):
         raise HTTPException(status_code=422, detail="A non-empty question is required.")
 
     try:
-        if images:
-            response = ask_question(question.strip(), images)
-        else:
-            response = ask_question(question.strip())
+        response = ask_question(question.strip(), images if images else None, history=history)
         response.setdefault("suggested_questions", [])
         return response
     except VisionModelUnsupportedError as exc:
@@ -197,6 +211,7 @@ async def query(request: Request):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except GroqRequestError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
+
 
 @app.post("/reset")
 async def reset():
