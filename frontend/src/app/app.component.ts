@@ -30,6 +30,10 @@ interface Msg {
   /** Text read from attached images, if any. */
   imageText?: string;
   followups?: string[];
+  /** True while the reply is being typed out letter by letter. */
+  streaming?: boolean;
+  /** HTML revealed so far while streaming. */
+  typed?: string;
 }
 
 const FALLBACK_PARAS = [
@@ -45,6 +49,10 @@ const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 3;
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+/** Typing animation: one tick every TYPE_TICK_MS, finishing long answers in roughly TYPE_MAX_MS. */
+const TYPE_TICK_MS = 16;
+const TYPE_MAX_MS = 4000;
 
 @Component({
   selector: 'app-root',
@@ -69,7 +77,13 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private toastT: any;
   private pendingScroll = false;
+  /** Keep the newest reply in view as it types, but never scroll past its first line. */
+  private followReply = false;
+  /** Last scroll position set while following; if the reader scrolls up from it, stop following. */
+  private autoTop = -1;
   private utterance: SpeechSynthesisUtterance | null = null;
+  private typingMsg: Msg | null = null;
+  private typingTimer: any;
 
   private http = inject(HttpClient);
   private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
@@ -86,11 +100,6 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.dark = false;
     }
     this.applyTheme();
-
-    // Seed the opening state with one worked example, so the first view
-    // shows the product in action rather than an empty shell.
-    this.messages.push({ role: 'user', text: 'How many leave days do I have left?' });
-    this.messages.push({ role: 'bot', entry: KB[0], q: QUESTIONS[KB[0].id], followups: this.followups(KB[0].id) });
   }
 
   ngAfterViewChecked(): void {
@@ -99,10 +108,24 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       el.scrollTop = el.scrollHeight;
       this.pendingScroll = false;
     }
+    if (this.followReply && this.stream) {
+      this.followReply = false;
+      const el = this.stream.nativeElement;
+      const replies = el.querySelectorAll<HTMLElement>('.msg.bot');
+      const last = replies[replies.length - 1];
+      const readerScrolledUp = this.autoTop >= 0 && el.scrollTop < this.autoTop - 4;
+      if (last && !readerScrolledUp) {
+        const replyTop = el.scrollTop + last.getBoundingClientRect().top - el.getBoundingClientRect().top - 16;
+        const target = Math.min(replyTop, el.scrollHeight - el.clientHeight);
+        if (target > el.scrollTop) el.scrollTop = target;
+        this.autoTop = el.scrollTop;
+      }
+    }
   }
 
   ngOnDestroy(): void {
     this.stopSpeaking();
+    this.finishTyping();
   }
 
   // --- Session -------------------------------------------------------------
@@ -121,6 +144,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   logout(): void {
     this.stopSpeaking();
+    this.finishTyping();
     this.railOpen = false;
     this.user = null;
     try {
@@ -338,12 +362,56 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     };
   }
 
-  /** Replace the typing indicator with the reply. */
+  /** Replace the typing indicator with the reply, then type the reply out. */
   private push(typingMsg: Msg, reply: Msg): void {
     const i = this.messages.indexOf(typingMsg);
     if (i > -1) this.messages.splice(i, 1);
     this.messages.push(reply);
-    this.pendingScroll = true;
+    this.autoTop = -1;
+    this.followReply = true;
+    this.startTyping(reply);
+  }
+
+  // --- Typing animation ----------------------------------------------------
+
+  private replyHtml(m: Msg): string {
+    if (m.entry) return m.entry.answer;
+    if (m.fallback) return FALLBACK_PARAS.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
+    if (m.note) return `<p>${escapeHtml(m.note)}</p>`;
+    return '';
+  }
+
+  /** Reveals the reply a few letters at a time; sources and actions appear once it finishes. */
+  private startTyping(m: Msg): void {
+    this.finishTyping();
+    const html = this.replyHtml(m);
+    const total = visibleLength(html);
+    const reduceMotion = !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    if (!total || reduceMotion) return;
+
+    const perTick = Math.max(1, Math.ceil(total / (TYPE_MAX_MS / TYPE_TICK_MS)));
+    let shown = 0;
+    m.streaming = true;
+    m.typed = '';
+    this.typingMsg = m;
+    this.typingTimer = setInterval(() => {
+      shown += perTick;
+      if (shown >= total) {
+        this.finishTyping();
+      } else {
+        m.typed = sliceHtml(html, shown) + '<span class="caret"></span>';
+      }
+      this.followReply = true;
+    }, TYPE_TICK_MS);
+  }
+
+  private finishTyping(): void {
+    clearInterval(this.typingTimer);
+    if (this.typingMsg) {
+      this.typingMsg.streaming = false;
+      this.typingMsg.typed = undefined;
+      this.typingMsg = null;
+    }
   }
 
   /** OCR in the browser; tesseract.js fetches its engine and language data on first use. */
@@ -370,12 +438,9 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   send(): void {
     if (!this.input.trim() && !this.pending.length) return;
-    if (this.pending.some((file) => file.url) && !this.input.trim()) {
+    if (this.pending.length && !this.input.trim()) {
       this.toast('Enter a question to send with your image.');
       return;
-    }
-    if (this.input.trim() && this.pending.some((file) => !file.url)) {
-      this.toast('PDF and document attachments are not processed in chat queries; only images are sent.');
     }
     this.ask(this.input, this.pending);
     this.input = '';
@@ -447,19 +512,19 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private addFiles(files: FileList | null | undefined): void {
     for (const f of Array.from(files || [])) {
-      if (f.type.startsWith('image/') && this.pending.filter((item) => item.url).length >= MAX_IMAGES) {
-        this.toast('You can attach up to 3 images per question.');
+      if (!IMAGE_TYPES.includes(f.type)) {
+        this.toast('Only images can be attached (JPG, PNG or WebP).');
         continue;
+      }
+      if (this.pending.length >= MAX_IMAGES) {
+        this.toast('You can attach up to 3 images per question.');
+        break;
       }
       if (f.size > MAX_FILE_BYTES) {
         this.toast(`${f.name} is over 10 MB`);
         continue;
       }
-      this.pending.push({
-        name: f.name,
-        url: f.type.startsWith('image/') ? URL.createObjectURL(f) : undefined,
-        file: f
-      });
+      this.pending.push({ name: f.name, url: URL.createObjectURL(f), file: f });
     }
   }
 
@@ -628,4 +693,37 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   trackByIndex(i: number): number {
     return i;
   }
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Walks HTML counting visible characters; tags count as 0 and entities as 1. Returns the index after `limit` characters. */
+function walkHtml(html: string, limit: number): { index: number; seen: number } {
+  let i = 0;
+  let seen = 0;
+  while (i < html.length && seen < limit) {
+    if (html[i] === '<') {
+      const end = html.indexOf('>', i);
+      i = end < 0 ? html.length : end + 1;
+    } else if (html[i] === '&') {
+      const end = html.indexOf(';', i);
+      i = end > -1 && end - i < 10 ? end + 1 : i + 1;
+      seen++;
+    } else {
+      i++;
+      seen++;
+    }
+  }
+  return { index: i, seen };
+}
+
+function visibleLength(html: string): number {
+  return walkHtml(html, Infinity).seen;
+}
+
+/** The first `n` visible characters of `html`, never cutting a tag or entity in half. */
+function sliceHtml(html: string, n: number): string {
+  return html.slice(0, walkHtml(html, n).index);
 }
