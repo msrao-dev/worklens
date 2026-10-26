@@ -276,6 +276,17 @@ button{font-family:inherit;cursor:pointer}
   .composer-wrap{padding:8px 14px 14px}
   .welcome h1{font-size:20px}
 }
+/* ---------- Typing animation ---------- */
+.caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:-2px;border-radius:2px;
+  background:var(--brand);animation:caret 1s steps(1) infinite}
+@keyframes caret{50%{opacity:0}}
+.reveal{animation:reveal .35s ease-out}
+@keyframes reveal{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+/* ---------- Theme toggle ---------- */
+.theme-float{position:fixed;top:16px;right:16px;z-index:5}
+@media (max-width:760px){.theme-btn{margin-left:auto}}
+
 /* ---------- Login ---------- */
 .rail-foot .icon-btn:first-of-type{margin-left:auto}
 .login{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px}

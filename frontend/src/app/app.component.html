@@ -1,4 +1,7 @@
-<app-login *ngIf="!user" (loggedIn)="onLogin($event)"></app-login>
+<ng-container *ngIf="!user">
+  <app-login (loggedIn)="onLogin($event)"></app-login>
+  <ng-container *ngTemplateOutlet="themeBtn; context: { $implicit: 'theme-float' }"></ng-container>
+</ng-container>
 
 <div class="app" *ngIf="user">
   <!-- Sidebar -->
@@ -31,10 +34,6 @@
       <button class="icon-btn" (click)="logout()" title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
-      <button class="icon-btn" (click)="toggleTheme()" title="Toggle theme" aria-label="Toggle theme">
-        <svg *ngIf="dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
-        <svg *ngIf="!dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
-      </button>
     </div>
   </aside>
   <div class="scrim" [class.show]="railOpen" (click)="railOpen = false"></div>
@@ -48,6 +47,7 @@
       <div class="top-title">Knowledge Assistant</div>
       <span class="demo-badge">{{ user.role }}</span>
       <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.email }}</b> ({{ user.role }})</div>
+      <ng-container *ngTemplateOutlet="themeBtn; context: { $implicit: 'theme-btn' }"></ng-container>
     </div>
 
     <div class="stream" #stream>
@@ -99,8 +99,9 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
                   Answered for {{ user.role }} · Bengaluru
                 </div>
-                <div class="answer" [innerHTML]="e.answer | safeHtml"></div>
+                <div class="answer" [innerHTML]="(m.streaming ? m.typed || '' : e.answer) | safeHtml"></div>
 
+                <div class="reveal" *ngIf="!m.streaming">
                 <div class="sources" *ngIf="e.sources?.length">
                   <div class="sources-h">Sources · {{ e.sources.length }}</div>
                   <button class="src" *ngFor="let s of e.sources; trackBy: trackByIndex" (click)="openDoc(s)">
@@ -140,13 +141,16 @@
                 </div>
 
                 <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
+                </div>
               </ng-container>
 
               <!-- Fallback / honest "I don't know" -->
               <ng-container *ngIf="m.fallback">
-                <div class="answer">
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
+                <div class="answer" *ngIf="!m.streaming">
                   <p *ngFor="let p of fallbackParas; trackBy: trackByIndex">{{ p }}</p>
                 </div>
+                <div class="reveal" *ngIf="!m.streaming">
                 <div class="meta">
                   <div class="acts" style="margin-left:0">
                     <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman()">
@@ -163,17 +167,21 @@
                   <span>Logged as a <strong>knowledge gap</strong> — if several people ask this, the admin dashboard flags it so the missing document can be added.</span>
                 </div>
                 <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
+                </div>
               </ng-container>
 
               <!-- Plain note, e.g. upload acknowledgement -->
               <ng-container *ngIf="m.note">
-                <div class="answer"><p>{{ m.note }}</p></div>
-                <div class="meta">
-                  <div class="acts">
-                    <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
+                <div class="answer" *ngIf="!m.streaming"><p>{{ m.note }}</p></div>
+                <div class="reveal" *ngIf="!m.streaming">
+                  <div class="meta">
+                    <div class="acts">
+                      <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
+                    </div>
                   </div>
+                  <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
                 </div>
-                <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
               </ng-container>
             </div>
           </div>
@@ -185,7 +193,7 @@
       <form class="composer" [class.dragging]="dragging" (ngSubmit)="send()"
         (dragenter)="onDragOver($event)" (dragover)="onDragOver($event)"
         (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
-        <div class="drop-hint" *ngIf="dragging">Drop image or file to attach</div>
+        <div class="drop-hint" *ngIf="dragging">Drop an image to attach</div>
         <div class="pending" *ngIf="pending.length">
           <span class="pending-item" *ngFor="let f of pending; let i = index; trackBy: trackByIndex">
             <img *ngIf="f.url" [src]="f.url" alt="" />
@@ -196,10 +204,10 @@
             </button>
           </span>
         </div>
-        <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop a screenshot or image to ask about it" aria-label="Attach image or file">
+        <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop an image (JPG, PNG, WebP)" aria-label="Attach image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-        <input #fileInput type="file" multiple hidden accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
+        <input #fileInput type="file" multiple hidden accept="image/jpeg,image/png,image/webp" (change)="onFiles(fileInput)" />
         <textarea
           [(ngModel)]="input"
           name="q"
@@ -229,9 +237,19 @@
   <div class="followups" *ngIf="m.followups?.length">
     <div class="followups-h">{{ m.fallback ? 'Try asking' : 'Related questions' }}</div>
     <div class="followups-list">
-      <button class="followup" *ngFor="let f of m.followups; trackBy: trackByIndex" (click)="ask(f)">{{ f }}</button>
+      <button class="followup" *ngFor="let f of m.followups.slice(0, 3); trackBy: trackByIndex" (click)="ask(f)">{{ f }}</button>
     </div>
   </div>
+</ng-template>
+
+<!-- Light / dark mode toggle -->
+<ng-template #themeBtn let-cls>
+  <button class="icon-btn" [ngClass]="cls" (click)="toggleTheme()"
+    [title]="dark ? 'Switch to light mode' : 'Switch to dark mode'"
+    [attr.aria-label]="dark ? 'Switch to light mode' : 'Switch to dark mode'">
+    <svg *ngIf="dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M19 5l-1.5 1.5M6.5 17.5 5 19"/></svg>
+    <svg *ngIf="!dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+  </button>
 </ng-template>
 
 <!-- Source modal -->
