@@ -1,7 +1,7 @@
 import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
@@ -44,6 +44,7 @@ const USER_KEY = 'wl-user';
 const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_IMAGES = 3;
 
 @Component({
   selector: 'app-root',
@@ -130,7 +131,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private loadUser(): User | null {
     try {
       const u = JSON.parse(localStorage.getItem(USER_KEY) || 'null');
-      return u?.email ? u : null;
+      return u && u.token ? u : null;
     } catch {
       return null;
     }
@@ -162,6 +163,23 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     return (RELATED[id] || []).map((r) => QUESTIONS[r]);
   }
 
+  /** Gathers previous conversation turns to provide conversational context for follow-up questions. */
+  private getChatHistory(): Array<{ role: 'user' | 'assistant'; text: string }> {
+    return this.messages
+      .filter((m) => !m.typing)
+      .map((m) => {
+        if (m.role === 'user') {
+          return { role: 'user' as const, text: m.text || '' };
+        }
+        return {
+          role: 'assistant' as const,
+          text: this.plainText(m)
+        };
+      })
+      .filter((m) => m.text.trim().length > 0)
+      .slice(-6);
+  }
+
   ask(text: string, files: Attachment[] = []): void {
     text = (text || '').trim();
     if (!text && !files.length) return;
@@ -174,7 +192,8 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
     const images = files.filter((f) => f.url && f.file);
     const started = Date.now();
-    const reading = images.length ? this.readImages(images, typingMsg) : Promise.resolve('');
+    if (images.length && !this.useMock) typingMsg.status = 'Analyzing your image…';
+    const reading = images.length && this.useMock ? this.readImages(images, typingMsg) : Promise.resolve('');
     reading.then((fromImage) => {
       // Keep a short "typing" pause even when there was nothing to read.
       const wait = Math.max(0, 650 - (Date.now() - started));
@@ -185,22 +204,71 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private reply(typingMsg: Msg, text: string, files: Attachment[], hadImages: boolean, fromImage: string): void {
     const query = [text, fromImage].filter(Boolean).join(' ');
     const imageText = fromImage || undefined;
+    const images = files.filter((f) => f.url && f.file);
 
     // Real API call to the FastAPI backend, unless mock data is switched on.
-    if (query && !this.useMock) {
-      this.http.post<{ answer: string; sources: string[] }>(this.apiUrl, { question: query }).subscribe({
+    if ((text || images.length) && !this.useMock) {
+      // Exclude the current user message to retain prior dialogue context only
+      const historyPayload = this.getChatHistory().slice(0, -1);
+
+      let body: object | FormData;
+      if (images.length) {
+        const form = new FormData();
+        form.append('question', text);
+        form.append('history', JSON.stringify(historyPayload));
+        images.forEach((image) => form.append('image', image.file!, image.name));
+        body = form;
+      } else {
+        body = { question: text, history: historyPayload };
+      }
+
+      const headers = new HttpHeaders({
+        Authorization: `Bearer ${this.user?.token || ''}`
+      });
+
+      this.http.post<{
+        answer: string;
+        sources: string[];
+        source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+        suggested_questions?: string[];
+        is_greeting?: boolean;
+      }>(this.apiUrl, body, { headers }).subscribe({
         next: (res) => {
-          if (res.answer.includes('Information not found')) {
-            this.push(typingMsg, this.fallbackReply(text, imageText));
+          const suggestedQuestions = Array.isArray(res.suggested_questions)
+            ? res.suggested_questions.filter((question) => typeof question === 'string' && !!question.trim())
+            : [];
+
+          if (!res.is_greeting && /^Information not found\.?$/i.test(res.answer.trim())) {
+            this.push(typingMsg, this.fallbackReply(text, imageText, suggestedQuestions));
             return;
           }
-          const sources: Source[] = (res.sources || []).map((doc, idx) => ({
-            title: `Document Chunk ${idx + 1}`,
-            section: 'Knowledge Base',
-            updated: '2026',
-            fresh: true,
-            passage: doc.replace(/\n/g, '<br/>')
-          }));
+
+          // Greeting or direct model conversational guidance
+          if (res.is_greeting) {
+            this.push(typingMsg, {
+              role: 'bot',
+              note: res.answer,
+              followups: suggestedQuestions.length ? suggestedQuestions : POPULAR.map((id) => QUESTIONS[id])
+            });
+            return;
+          }
+
+          const sourceRefs = res.source_refs || [];
+          const sources: Source[] = sourceRefs.length
+            ? sourceRefs.map((source, idx) => ({
+                title: source.source || `Document Chunk ${idx + 1}`,
+                section: source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`,
+                updated: '2026',
+                fresh: true,
+                passage: source.text.replace(/\n/g, '<br/>')
+              }))
+            : (res.sources || []).map((doc, idx) => ({
+                title: `Document Chunk ${idx + 1}`,
+                section: 'Knowledge Base',
+                updated: '2026',
+                fresh: true,
+                passage: doc.replace(/\n/g, '<br/>')
+              }));
           const entry: KBEntry = {
             id: String(Date.now()),
             cat: 'Policy',
@@ -209,12 +277,36 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
             sources
           };
-          this.push(typingMsg, { role: 'bot', entry, q: text || query, imageText });
+          this.push(typingMsg, {
+            role: 'bot',
+            entry,
+            q: text || query,
+            imageText,
+            followups: suggestedQuestions
+          });
         },
         error: (err) => {
-          console.error('API Error:', err);
-          this.push(typingMsg, this.fallbackReply(text, imageText));
+          if (err.status === 401) {
+            this.logout();
+            this.toast('Session expired. Please sign in again.');
+            return;
+          }
+          const detail = typeof err.error?.detail === 'string' ? err.error.detail : '';
+          this.push(typingMsg, {
+            role: 'bot',
+            note: detail || 'WorkLens could not process this query. Please try again.'
+          });
         }
+      });
+      return;
+    }
+
+    const isGreetingMock = /^(hi|hello|hey|good\s+(morning|afternoon|evening))\b/i.test(query.trim());
+    if (isGreetingMock) {
+      this.push(typingMsg, {
+        role: 'bot',
+        note: 'Hello! I am your WorkLens assistant. How can I assist you with the employee handbook, leave policy, or workplace benefits today?',
+        followups: POPULAR.map((id) => QUESTIONS[id])
       });
       return;
     }
@@ -236,8 +328,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     this.push(typingMsg, reply);
   }
 
-  private fallbackReply(text: string, imageText?: string): Msg {
-    return { role: 'bot', fallback: true, q: text, imageText, followups: POPULAR.map((id) => QUESTIONS[id]) };
+  private fallbackReply(text: string, imageText?: string, followups?: string[]): Msg {
+    return {
+      role: 'bot',
+      fallback: true,
+      q: text,
+      imageText,
+      followups: followups && followups.length ? followups : POPULAR.map((id) => QUESTIONS[id])
+    };
   }
 
   /** Replace the typing indicator with the reply. */
@@ -272,6 +370,13 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   send(): void {
     if (!this.input.trim() && !this.pending.length) return;
+    if (this.pending.some((file) => file.url) && !this.input.trim()) {
+      this.toast('Enter a question to send with your image.');
+      return;
+    }
+    if (this.input.trim() && this.pending.some((file) => !file.url)) {
+      this.toast('PDF and document attachments are not processed in chat queries; only images are sent.');
+    }
     this.ask(this.input, this.pending);
     this.input = '';
     this.pending = [];
@@ -342,6 +447,10 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private addFiles(files: FileList | null | undefined): void {
     for (const f of Array.from(files || [])) {
+      if (f.type.startsWith('image/') && this.pending.filter((item) => item.url).length >= MAX_IMAGES) {
+        this.toast('You can attach up to 3 images per question.');
+        continue;
+      }
       if (f.size > MAX_FILE_BYTES) {
         this.toast(`${f.name} is over 10 MB`);
         continue;

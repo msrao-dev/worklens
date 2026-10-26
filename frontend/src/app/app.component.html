@@ -46,8 +46,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
       </button>
       <div class="top-title">Knowledge Assistant</div>
-      <span class="demo-badge">Demo · sample data</span>
-      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.name }}</b> · Bengaluru · Engineering</div>
+      <span class="demo-badge">{{ user.role }}</span>
+      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.email }}</b> ({{ user.role }})</div>
     </div>
 
     <div class="stream" #stream>
@@ -97,11 +97,11 @@
               <ng-container *ngIf="m.entry as e">
                 <div class="ctx-line">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
-                  Answered for Engineering · Bengaluru
+                  Answered for {{ user.role }} · Bengaluru
                 </div>
                 <div class="answer" [innerHTML]="e.answer | safeHtml"></div>
 
-                <div class="sources">
+                <div class="sources" *ngIf="e.sources?.length">
                   <div class="sources-h">Sources · {{ e.sources.length }}</div>
                   <button class="src" *ngFor="let s of e.sources; trackBy: trackByIndex" (click)="openDoc(s)">
                     <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
@@ -173,6 +173,7 @@
                     <ng-container *ngTemplateOutlet="playBtn; context: { $implicit: m }"></ng-container>
                   </div>
                 </div>
+                <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
               </ng-container>
             </div>
           </div>
@@ -198,7 +199,7 @@
         <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop a screenshot or image to ask about it" aria-label="Attach image or file">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-        <input #fileInput type="file" multiple hidden accept="image/*,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
+        <input #fileInput type="file" multiple hidden accept="image/jpeg,image/png,image/webp,.pdf,.doc,.docx,.txt" (change)="onFiles(fileInput)" />
         <textarea
           [(ngModel)]="input"
           name="q"

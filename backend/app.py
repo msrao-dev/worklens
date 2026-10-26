@@ -8,8 +8,6 @@ load_dotenv()
 from backend.ingest import extract_text
 from backend.rag import store_chunks, ask_question, reset_collection
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from fastapi import HTTPException
-from backend.guardrails import validate_input
 
 app = FastAPI()
 
@@ -65,12 +63,8 @@ async def ingest(file: UploadFile = File(...)):
 
 @app.post("/query")
 async def query(body: dict):
-    try:
-        question = validate_input(body.get("question"))
-    except ValueError as e:
-        raise HTTPException(status_code=422, detail=str(e))
+    return ask_question(body["question"])
 
-    return ask_question(question)
 @app.post("/reset")
 async def reset():
     reset_collection()

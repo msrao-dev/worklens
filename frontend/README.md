@@ -1,9 +1,8 @@
 # WorkLens — Angular front end
 
 The Employee Knowledge Assistant UI, built as an Angular 17 standalone-component app.
-This is the **front end only**: answers come from a sample knowledge base in
-`src/app/worklens.data.ts`. In production you replace that with a call to a real
-RAG backend (retrieve from a vector DB, then generate a grounded answer).
+The app includes a sample knowledge base in `src/app/worklens.data.ts` for mock
+mode and can also call the FastAPI RAG backend for real answers.
 
 ## What you need first
 
@@ -93,17 +92,28 @@ src/
 
 ## Where the real backend plugs in
 
-Everything funnels through one method in `app.component.ts`:
+The chat sends text-only questions as JSON to `POST /query`:
 
-```ts
-private match(text: string): KBEntry | null { ... }   // keyword match over the sample KB
+```json
+{"question": "How many leave days do I have?"}
 ```
 
-To connect a real assistant, replace the body of `ask()` so that instead of
-calling `match()` it calls your API (e.g. `POST /api/ask` with the question),
-and pushes the returned answer + sources into `messages`. The response just
-needs to match the `KBEntry` / `Source` shapes in `worklens.data.ts`, and the
-whole UI — citations, confidence, freshness, feedback — keeps working unchanged.
+When an image is attached, the browser sends `multipart/form-data` to the same
+endpoint with a `question` field and one or more `image` file fields. The backend
+validates each image (JPEG, PNG, or WebP; 10 MB maximum per image; at most three
+images; 14 MB combined raw image data) and sends valid image bytes inline as
+Base64 data URLs to the configured Groq vision model. The Groq API key remains
+on the backend.
+
+Configure the backend with `LLM_PROVIDER=groq`, `GROQ_MODEL=qwen/qwen3.8-27b`,
+and `GROQ_API_KEY`. Text-only requests continue to use the existing JSON
+interface and RAG behavior. Image queries include retrieved handbook context;
+visual observations are not treated as evidence of company policy.
+
+The existing `/ingest` endpoint accepts PDF, DOCX, and TXT files and stores
+extracted text in ChromaDB. PDF extraction is text-only (`page.get_text()`):
+embedded charts, screenshots, and scanned pages may not be represented in
+retrieved context. PDF page-image processing is not part of image-aware chat.
 
 ## Features in this build
 
