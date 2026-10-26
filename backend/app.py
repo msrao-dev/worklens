@@ -1,15 +1,18 @@
 import io
 import json
 import os
+from typing import Optional
 import warnings
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
 from PIL import Image, UnidentifiedImageError
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
+from pydantic import BaseModel
+from backend.tts import synthesize_speech, cleanup_audio_cache
 
 load_dotenv()
 
@@ -38,6 +41,9 @@ from backend.rag import (
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
+class TTSRequest(BaseModel):
+    text: str
+    voice: Optional[str] = "amy"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -379,3 +385,25 @@ async def query(
 async def reset(_current_user: dict = Depends(require_hr_user)):
     reset_collection()
     return {"status": "success"}
+
+@app.post("/audio/tts")
+def text_to_speech(
+    payload: TTSRequest,
+    background_tasks: BackgroundTasks,
+    _current_user: dict = Depends(get_current_user),
+):
+    text = payload.text.strip()
+    voice = (payload.voice or "amy").strip().lower()
+
+    if not text:
+        raise HTTPException(status_code=400, detail="Text payload is required.")
+
+    if voice not in ("amy", "ryan"):
+        voice = "amy"
+
+    wav_bytes, _ = synthesize_speech(text, voice_name=voice)
+
+    # Trigger post-response cleanup in the background
+    background_tasks.add_task(cleanup_audio_cache)
+
+    return Response(content=wav_bytes, media_type="audio/wav")
