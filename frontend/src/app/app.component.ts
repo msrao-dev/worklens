@@ -75,18 +75,22 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   toastMsg = '';
   toastShow = false;
 
+  selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
+  private currentAudio: HTMLAudioElement | null = null;
+  private currentAudioUrl: string | null = null;
+
   private toastT: any;
   private pendingScroll = false;
   /** Keep the newest reply in view as it types, but never scroll past its first line. */
   private followReply = false;
   /** Last scroll position set while following; if the reader scrolls up from it, stop following. */
   private autoTop = -1;
-  private utterance: SpeechSynthesisUtterance | null = null;
   private typingMsg: Msg | null = null;
   private typingTimer: any;
 
   private http = inject(HttpClient);
   private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
   private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
@@ -372,6 +376,76 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     this.startTyping(reply);
   }
 
+  // --- Voice & Read aloud --------------------------------------------------
+
+  toggleVoice(): void {
+    this.stopSpeaking();
+    this.selectedVoice = this.selectedVoice === 'amy' ? 'ryan' : 'amy';
+    localStorage.setItem('wl-voice', this.selectedVoice);
+    this.toast(`Voice switched to ${this.selectedVoice === 'amy' ? 'Amy' : 'Ryan'}`);
+  }
+
+  speak(m: Msg): void {
+    if (this.speaking === m) {
+      this.stopSpeaking();
+      return;
+    }
+
+    this.stopSpeaking();
+    this.speaking = m;
+
+    const textToRead = this.plainText(m);
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ''}`
+    });
+
+    this.http.post(this.ttsUrl, { text: textToRead, voice: this.selectedVoice }, {
+      headers,
+      responseType: 'blob'
+    }).subscribe({
+      next: (blob) => {
+        // Stop if the user cancelled or clicked another message while loading
+        if (this.speaking !== m) return;
+
+        this.currentAudioUrl = URL.createObjectURL(blob);
+        const audio = new Audio(this.currentAudioUrl);
+        this.currentAudio = audio;
+
+        audio.onended = () => {
+          this.zone.run(() => this.stopSpeaking());
+        };
+        audio.onerror = () => {
+          this.zone.run(() => {
+            this.toast('Error playing audio');
+            this.stopSpeaking();
+          });
+        };
+
+        audio.play().catch(() => {
+          this.stopSpeaking();
+          this.toast('Browser blocked autoplay');
+        });
+      },
+      error: (err) => {
+        this.stopSpeaking();
+        const detail = err.error?.detail || 'Could not generate speech.';
+        this.toast(detail);
+      }
+    });
+  }
+
+  private stopSpeaking(): void {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+    }
+    this.speaking = null;
+  }
+
   // --- Typing animation ----------------------------------------------------
 
   private replyHtml(m: Msg): string {
@@ -533,7 +607,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     if (f?.url) URL.revokeObjectURL(f.url);
   }
 
-  // --- Read aloud ----------------------------------------------------------
+  // --- Helpers -------------------------------------------------------------
 
   private stripHtml(html: string): string {
     const tmp = document.createElement('div');
@@ -551,40 +625,6 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private sourceLine(s: Source, i: number): string {
     return `${i + 1}. ${s.title} — ${s.section} (updated ${s.updated})`;
   }
-
-  speak(m: Msg): void {
-    if (this.speaking === m) {
-      this.stopSpeaking();
-      return;
-    }
-    if (!('speechSynthesis' in window)) {
-      this.toast('Read aloud isn’t supported in this browser');
-      return;
-    }
-    this.stopSpeaking();
-    const u = new SpeechSynthesisUtterance(this.plainText(m));
-    const done = () =>
-      this.zone.run(() => {
-        // cancel() fires end/error for the previous utterance; ignore stale ones.
-        if (this.utterance === u) {
-          this.utterance = null;
-          this.speaking = null;
-        }
-      });
-    u.onend = done;
-    u.onerror = done;
-    this.utterance = u;
-    this.speaking = m;
-    window.speechSynthesis.speak(u);
-  }
-
-  private stopSpeaking(): void {
-    this.utterance = null;
-    this.speaking = null;
-    if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-  }
-
-  // -------------------------------------------------------------------------
 
   openDoc(s: Source): void {
     this.selectedSource = s;

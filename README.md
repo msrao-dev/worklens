@@ -11,7 +11,7 @@ source venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 
-
+install following system packages for read aloud feature: espeak-ng libespeak-ng1
 
 set env vars:
 ```
