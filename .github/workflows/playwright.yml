@@ -2,10 +2,7 @@ name: WorkLens Playwright Tests
 
 on:
   pull_request:
-  push:
-    branches:
-      - main
-      - feat/playwright-smoke-automation
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 jobs:
