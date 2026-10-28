@@ -11,6 +11,9 @@ export interface Source {
   updated: string;
   fresh: boolean;
   passage: string; // HTML; <mark> wraps the exact cited span
+  pageNumber?: number;
+  lineStart?: number;
+  lineEnd?: number;
 }
 
 export interface KBEntry {

@@ -30,7 +30,7 @@ from backend.auth import (
     get_current_user,
     require_hr_user,
 )
-from backend.ingest import extract_text
+from backend.ingest import IndexedChunk, extract_text_units
 from backend.rag import (
     GroqRequestError,
     LLMConfigurationError,
@@ -40,6 +40,42 @@ from backend.rag import (
     store_chunks,
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+def _split_text_units(text_units: list[tuple[int | None, str]]) -> list[IndexedChunk]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        add_start_index=True,
+    )
+    chunks: list[IndexedChunk] = []
+
+    for page_number, text in text_units:
+        if not text.strip():
+            continue
+
+        for document in splitter.create_documents([text]):
+            chunk_text = document.page_content
+            start_index = document.metadata.get("start_index")
+            if (
+                not chunk_text
+                or not isinstance(start_index, int)
+                or start_index < 0
+                or start_index + len(chunk_text) > len(text)
+            ):
+                raise RuntimeError("Could not determine a document chunk's source position.")
+
+            line_start = text.count("\n", 0, start_index) + 1
+            line_end = line_start + chunk_text.rstrip("\r\n").count("\n")
+            chunks.append({
+                "text": chunk_text,
+                "page_number": page_number,
+                "line_start": line_start,
+                "line_end": line_end,
+            })
+
+    return chunks
+
 
 class TTSRequest(BaseModel):
     text: str
@@ -266,19 +302,20 @@ async def ingest(
     file: UploadFile = File(...),
     _current_user: dict = Depends(require_hr_user),
 ):
+    if not file.filename:
+        raise HTTPException(status_code=422, detail="A filename is required.")
+
     filepath = os.path.join(UPLOAD_DIR, file.filename)
 
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
-    text = extract_text(filepath)
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
-
-    chunks = splitter.split_text(text)
+    chunks = _split_text_units(extract_text_units(filepath))
+    if not chunks:
+        raise HTTPException(
+            status_code=422,
+            detail="No extractable text was found in the uploaded document.",
+        )
     store_chunks(chunks, filename=file.filename)
 
     return {
