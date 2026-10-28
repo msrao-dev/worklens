@@ -7,6 +7,7 @@ import chromadb
 import uuid
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+from backend.ingest import IndexedChunk
 
 load_dotenv()
 
@@ -196,22 +197,30 @@ Answer:
     return normalized
 
 
-def store_chunks(chunks, filename="doc"):
-    embeddings = MODEL.encode(chunks).tolist()
+def store_chunks(chunks: list[IndexedChunk], filename: str = "doc") -> None:
+    documents = [chunk["text"] for chunk in chunks]
+    embeddings = MODEL.encode(documents).tolist()
 
     ids = [
         f"{filename}_{i}_{uuid.uuid4().hex[:8]}"
-        for i in range(len(chunks))
+        for i in range(len(documents))
     ]
 
-    metadatas = [
-        {"source": filename, "chunk_index": i}
-        for i in range(len(chunks))
-    ]
+    metadatas = []
+    for index, chunk in enumerate(chunks):
+        metadata: dict[str, str | int] = {
+            "source": filename,
+            "chunk_index": index,
+            "line_start": chunk["line_start"],
+            "line_end": chunk["line_end"],
+        }
+        if chunk["page_number"] is not None:
+            metadata["page_number"] = chunk["page_number"]
+        metadatas.append(metadata)
 
     collection.add(
         ids=ids,
-        documents=chunks,
+        documents=documents,
         embeddings=embeddings,
         metadatas=metadatas,
     )
@@ -281,6 +290,9 @@ Do not invent company policies. Keep the tone courteous, helpful, and profession
         source_refs.append({
             "source": chunk_metadata.get("source", "Knowledge Base"),
             "chunk_index": chunk_metadata.get("chunk_index"),
+            "page_number": chunk_metadata.get("page_number"),
+            "line_start": chunk_metadata.get("line_start"),
+            "line_end": chunk_metadata.get("line_end"),
             "text": doc,
         })
 

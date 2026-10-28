@@ -111,7 +111,12 @@ interface and RAG behavior. Image queries include retrieved handbook context;
 visual observations are not treated as evidence of company policy.
 
 The existing `/ingest` endpoint accepts PDF, DOCX, and TXT files and stores
-extracted text in ChromaDB. PDF extraction is text-only (`page.get_text()`):
+extracted text and citation locations in ChromaDB. PDF chunks retain their
+1-based page number and extracted-text line range; DOCX and TXT chunks retain
+their extracted-text line range (page numbers are not available for those
+formats). Retrieved source cards show the location, and the source detail view
+highlights the exact retrieved passage. PDF extraction is text-only
+(`page.get_text("text")`):
 embedded charts, screenshots, and scanned pages may not be represented in
 retrieved context. PDF page-image processing is not part of image-aware chat.
 
