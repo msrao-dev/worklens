@@ -257,7 +257,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.http.post<{
         answer: string;
         sources: string[];
-        source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+        source_refs?: Array<{
+          source?: string;
+          chunk_index?: number | null;
+          page_number?: number | null;
+          line_start?: number | null;
+          line_end?: number | null;
+          text: string;
+        }>;
         suggested_questions?: string[];
         is_greeting?: boolean;
       }>(this.apiUrl, body, { headers }).subscribe({
@@ -285,17 +292,21 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
           const sources: Source[] = sourceRefs.length
             ? sourceRefs.map((source, idx) => ({
                 title: source.source || `Document Chunk ${idx + 1}`,
-                section: source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`,
+                section: this.sourceLocation(source.page_number, source.line_start, source.line_end)
+                  || (source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`),
                 updated: '2026',
                 fresh: true,
-                passage: source.text.replace(/\n/g, '<br/>')
+                pageNumber: source.page_number ?? undefined,
+                lineStart: source.line_start ?? undefined,
+                lineEnd: source.line_end ?? undefined,
+                passage: `<mark>${escapeHtml(source.text).replace(/\n/g, '<br/>')}</mark>`
               }))
             : (res.sources || []).map((doc, idx) => ({
                 title: `Document Chunk ${idx + 1}`,
                 section: 'Knowledge Base',
                 updated: '2026',
                 fresh: true,
-                passage: doc.replace(/\n/g, '<br/>')
+                passage: `<mark>${escapeHtml(doc).replace(/\n/g, '<br/>')}</mark>`
               }));
           const entry: KBEntry = {
             id: String(Date.now()),
@@ -624,6 +635,23 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private sourceLine(s: Source, i: number): string {
     return `${i + 1}. ${s.title} — ${s.section} (updated ${s.updated})`;
+  }
+
+  private sourceLocation(
+    pageNumber?: number | null,
+    lineStart?: number | null,
+    lineEnd?: number | null
+  ): string {
+    const location: string[] = [];
+    if (pageNumber != null) location.push(`Page ${pageNumber}`);
+    if (lineStart != null) {
+      location.push(
+        lineEnd != null && lineEnd !== lineStart
+          ? `Lines ${lineStart}-${lineEnd}`
+          : `Line ${lineStart}`
+      );
+    }
+    return location.join(' · ');
   }
 
   openDoc(s: Source): void {
