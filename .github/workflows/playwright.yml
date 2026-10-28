@@ -1,0 +1,49 @@
+name: WorkLens Playwright Tests
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - feat/playwright-smoke-automation
+  workflow_dispatch:
+
+jobs:
+  playwright-tests:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: automation
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: automation/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        run: npx playwright test
+        env:
+          WORKLENS_BASE_URL: ${{ vars.WORKLENS_BASE_URL }}
+          WORKLENS_TEST_EMAIL: ${{ secrets.WORKLENS_TEST_EMAIL }}
+          WORKLENS_TEST_PASSWORD: ${{ secrets.WORKLENS_TEST_PASSWORD }}
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: automation/playwright-report/
+          retention-days: 7
