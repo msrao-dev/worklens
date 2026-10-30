@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -61,7 +61,7 @@ const TYPE_MAX_MS = 4000;
   imports: [CommonModule, FormsModule, SafeHtmlPipe, LoginComponent],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements AfterViewChecked, OnDestroy {
+export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   user: User | null = this.loadUser();
   history: string[] = this.loadHistory();
   messages: Msg[] = [];
@@ -77,6 +77,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   sourceDocumentLoading = false;
   toastMsg = '';
   toastShow = false;
+  docCount = 0;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   private currentAudio: HTMLAudioElement | null = null;
@@ -96,6 +97,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private backendUrl = environment.apiUrl || 'http://127.0.0.1:8000';
   private apiUrl = this.backendUrl + '/query';
   private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
+  private statsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/documents/stats';
   private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
@@ -109,6 +111,33 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.dark = false;
     }
     this.applyTheme();
+  }
+
+  
+  ngOnInit(): void {
+    if (this.user) {
+      this.fetchDocStats();
+    }
+  }
+
+  fetchDocStats(): void {
+    if (this.useMock) {
+      this.docCount = 12;
+      return;
+    }
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ""}`
+    });
+    this.http.get<{ count: number }>(this.statsUrl, { headers }).subscribe({
+      next: (res) => {
+        if (typeof res.count === "number") {
+          this.docCount = res.count;
+        }
+      },
+      error: () => {
+        this.docCount = 0;
+      }
+    });
   }
 
   ngAfterViewChecked(): void {
@@ -154,6 +183,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   onLogin(user: User): void {
     this.user = user;
+    this.fetchDocStats();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {}
