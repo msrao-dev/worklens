@@ -2,6 +2,7 @@ import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, 
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
@@ -72,6 +73,8 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   dark = false;
   railOpen = false;
   selectedSource: Source | null = null;
+  sourceDocumentUrl: string | null = null;
+  sourceDocumentLoading = false;
   toastMsg = '';
   toastShow = false;
 
@@ -89,7 +92,9 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private typingTimer: any;
 
   private http = inject(HttpClient);
-  private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private sanitizer = inject(DomSanitizer);
+  private backendUrl = environment.apiUrl || 'http://127.0.0.1:8000';
+  private apiUrl = this.backendUrl + '/query';
   private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
   private useMock = (environment as any).useMock ?? false;
 
@@ -130,6 +135,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   ngOnDestroy(): void {
     this.stopSpeaking();
     this.finishTyping();
+    this.clearSourceDocumentUrl();
+  }
+
+  private clearSourceDocumentUrl(): void {
+    if (this.sourceDocumentUrl) {
+      URL.revokeObjectURL(this.sourceDocumentUrl.split('#')[0]);
+      this.sourceDocumentUrl = null;
+    }
   }
 
   // --- Session -------------------------------------------------------------
@@ -297,6 +310,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
                 updated: '2026',
                 fresh: true,
                 pageNumber: source.page_number ?? undefined,
+                documentName: source.source || undefined,
                 lineStart: source.line_start ?? undefined,
                 lineEnd: source.line_end ?? undefined,
                 passage: `<mark>${escapeHtml(source.text).replace(/\n/g, '<br/>')}</mark>`
@@ -656,9 +670,44 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   openDoc(s: Source): void {
     this.selectedSource = s;
+    this.clearSourceDocumentUrl();
+    this.sourceDocumentLoading = false;
+
+    if (!s.documentName) return;
+
+    const documentName = s.documentName.trim();
+    const extension = documentName.split('.').pop()?.toLowerCase();
+    if (!documentName || extension !== 'pdf') return;
+
+    this.sourceDocumentLoading = true;
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ''}`
+    });
+    const url = `${this.backendUrl}/documents/${encodeURIComponent(documentName)}`;
+    this.http.get(url, { headers, responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        if (this.selectedSource !== s) return;
+        const objectUrl = URL.createObjectURL(blob);
+        this.sourceDocumentUrl = s.pageNumber
+          ? `${objectUrl}#page=${s.pageNumber}`
+          : objectUrl;
+        this.sourceDocumentLoading = false;
+      },
+      error: () => {
+        if (this.selectedSource !== s) return;
+        this.sourceDocumentLoading = false;
+        this.toastMsg = 'Unable to open the source document.';
+        this.toastShow = true;
+      }
+    });
   }
   closeDoc(): void {
     this.selectedSource = null;
+    this.sourceDocumentLoading = false;
+    this.clearSourceDocumentUrl();
+  }
+  safeSourceDocumentUrl(): SafeResourceUrl | null {
+    return this.sourceDocumentUrl ? this.sanitizer.bypassSecurityTrustResourceUrl(this.sourceDocumentUrl) : null;
   }
 
   /** Copies the answer plus its sources, ready to paste into Teams or email. */

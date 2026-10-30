@@ -263,25 +263,38 @@
   </button>
 </ng-template>
 
-<!-- Source modal -->
-<div class="overlay" [class.show]="selectedSource" (click)="closeDoc()">
-  <div class="doc-card" *ngIf="selectedSource as s" role="dialog" aria-modal="true" (click)="$event.stopPropagation()">
+<!-- Source navigation panel -->
+<div class="overlay source-overlay" [class.show]="selectedSource" (click)="closeDoc()">
+  <aside class="doc-card source-panel" *ngIf="selectedSource as s" role="dialog" aria-modal="true" aria-label="Source document navigation" (click)="$event.stopPropagation()">
     <div class="doc-head">
       <svg class="doc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
-      <div>
+      <div class="doc-title-wrap">
         <div class="t">{{ s.title }}</div>
-        <div class="s"><span>{{ s.section }}</span><span>Updated {{ s.updated }}</span></div>
+        <div class="s"><span>{{ s.section }}</span></div>
       </div>
-      <button class="icon-btn doc-close" (click)="closeDoc()" aria-label="Close">
+      <button class="icon-btn doc-close" (click)="closeDoc()" aria-label="Close source panel">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="doc-body"><div class="passage" [innerHTML]="s.passage | safeHtml"></div></div>
-    <div class="doc-foot">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>
-      <span>{{ isStale(s.updated) ? 'This source is over a year old — verify it’s still current.' : 'Highlighted text is the exact passage this answer was drawn from.' }}</span>
+
+    <div class="source-viewer">
+      <div class="source-loader" *ngIf="sourceDocumentLoading">Loading document…</div>
+      <iframe
+        *ngIf="sourceDocumentUrl"
+        class="source-frame"
+        [src]="safeSourceDocumentUrl()"
+        title="{{ s.title }}">
+      </iframe>
+      <div class="source-fallback" *ngIf="!sourceDocumentLoading && !sourceDocumentUrl">
+        <div class="passage" [innerHTML]="s.passage | safeHtml"></div>
+      </div>
     </div>
-  </div>
+
+    <div class="source-citation">
+      <div class="source-citation-label">Answer citation</div>
+      <div class="passage" [innerHTML]="s.passage | safeHtml"></div>
+    </div>
+  </aside>
 </div>
 
 <!-- Toast -->
