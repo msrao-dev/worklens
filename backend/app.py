@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
+from pathlib import Path
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
@@ -297,6 +299,23 @@ def reset_password(
 
 # --- Application Endpoints ---
 
+@app.get("/documents/{filename}")
+def get_document(filename: str, _current_user: dict = Depends(get_current_user)):
+    safe_name = Path(filename).name
+    filepath = Path(UPLOAD_DIR).resolve() / safe_name
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if filepath.suffix.lower() not in {".pdf", ".docx", ".txt"}:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    return FileResponse(
+        path=str(filepath),
+        filename=safe_name,
+        media_type="application/pdf" if filepath.suffix.lower() == ".pdf" else "application/octet-stream",
+        content_disposition_type="inline" if filepath.suffix.lower() == ".pdf" else "attachment",
+    )
+
+
 @app.post("/ingest")
 async def ingest(
     file: UploadFile = File(...),
@@ -305,7 +324,10 @@ async def ingest(
     if not file.filename:
         raise HTTPException(status_code=422, detail="A filename is required.")
 
-    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    safe_name = Path(file.filename).name
+    if not safe_name:
+        raise HTTPException(status_code=422, detail="A filename is required.")
+    filepath = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(filepath, "wb") as f:
         f.write(await file.read())
@@ -316,7 +338,7 @@ async def ingest(
             status_code=422,
             detail="No extractable text was found in the uploaded document.",
         )
-    store_chunks(chunks, filename=file.filename)
+    store_chunks(chunks, filename=safe_name)
 
     return {
         "status": "success",
