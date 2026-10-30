@@ -15,6 +15,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
 from backend.tts import synthesize_speech, cleanup_audio_cache
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -446,7 +447,7 @@ async def reset(_current_user: dict = Depends(require_hr_user)):
     return {"status": "success"}
 
 @app.post("/audio/tts")
-def text_to_speech(
+async def text_to_speech(
     payload: TTSRequest,
     background_tasks: BackgroundTasks,
     _current_user: dict = Depends(get_current_user),
@@ -460,7 +461,8 @@ def text_to_speech(
     if voice not in ("amy", "ryan"):
         voice = "amy"
 
-    wav_bytes, _ = synthesize_speech(text, voice_name=voice)
+    # Offload the chunked CPU synthesis so Uvicorn can still respond to health checks
+    wav_bytes, _ = await run_in_threadpool(synthesize_speech, text, voice_name=voice)
 
     # Trigger post-response cleanup in the background
     background_tasks.add_task(cleanup_audio_cache)
