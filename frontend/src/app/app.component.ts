@@ -327,7 +327,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
             cat: 'Policy',
             kw: [],
             conf: 'high',
-            answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
+            answer: res.answer,
             sources
           };
           this.push(typingMsg, {
@@ -644,7 +644,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private plainText(m: Msg): string {
     if (m.fallback) return FALLBACK_PARAS.join(' ');
     if (m.note) return m.note;
-    return this.stripHtml(m.entry?.answer || '');
+    const raw = m.entry?.answer || '';
+    // Strip markdown formatting characters (*, _, #, `, []) for cleaner read-aloud and export
+    const cleanMarkdown = raw
+      .replace(/[*_]{1,3}/g, '')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    return this.stripHtml(cleanMarkdown);
   }
 
   private sourceLine(s: Source, i: number): string {
