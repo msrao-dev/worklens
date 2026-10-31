@@ -459,7 +459,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
       responseType: 'blob'
     }).subscribe({
       next: (blob) => {
-        // Stop if the user cancelled or clicked another message while loading
+        // Cancelled or switched messages while waiting for network
         if (this.speaking !== m) return;
 
         this.currentAudioUrl = URL.createObjectURL(blob);
@@ -471,22 +471,78 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
         };
         audio.onerror = () => {
           this.zone.run(() => {
-            this.toast('Error playing audio');
-            this.stopSpeaking();
+            // Audio decode error -> fall back to browser speech
+            this.speakWithBrowser(textToRead, m);
           });
         };
 
         audio.play().catch(() => {
-          this.stopSpeaking();
-          this.toast('Browser blocked autoplay');
+          // Autoplay blocked -> fall back to browser speech
+          this.speakWithBrowser(textToRead, m);
         });
       },
-      error: (err) => {
-        this.stopSpeaking();
-        const detail = err.error?.detail || 'Could not generate speech.';
-        this.toast(detail);
+      error: () => {
+        // Backend failure (e.g. 503, timeout, network error) -> Fall back to browser speech
+        if (this.speaking !== m) return;
+        this.speakWithBrowser(textToRead, m);
       }
     });
+  }
+
+  /** Browser-native SpeechSynthesis fallback */
+  private speakWithBrowser(text: string, m: Msg): void {
+    console.log("speakWithBrowser");
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      this.toast('Speech synthesis is not supported on this device.');
+      this.stopSpeaking();
+      return;
+    }
+
+    // Stop any existing audio or speech
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+
+    // Pick an appropriate client-side voice matching the selection
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) {
+      const isAmy = this.selectedVoice === 'amy';
+      const targetGenderKeywords = isAmy
+        ? ['female', 'samantha', 'zira', 'karen', 'victoria', 'amy']
+        : ['male', 'david', 'george', 'ryan', 'alex', 'guy'];
+
+      const matchedVoice = voices.find((v) => {
+        const name = v.name.toLowerCase();
+        return v.lang.startsWith('en') && targetGenderKeywords.some((kw) => name.includes(kw));
+      }) || voices.find((v) => v.lang.startsWith('en'));
+
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
+    }
+
+    utterance.onstart = () => {
+      console.log('SpeechSynthesis: started');
+    };
+
+    utterance.onend = (e) => {
+      console.log('SpeechSynthesis: ended', e);
+      this.zone.run(() => this.stopSpeaking());
+    };
+
+    utterance.onerror = (e) => {
+      console.error('SpeechSynthesis error:', e.error, e);
+      this.toast(`Browser speech failed: ${e.error}`);
+      this.zone.run(() => this.stopSpeaking());
+    };
+
+    this.speaking = m;
+    window.speechSynthesis.speak(utterance);
   }
 
   private stopSpeaking(): void {
@@ -497,6 +553,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
     this.speaking = null;
   }
@@ -738,11 +797,13 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
       }
     });
   }
+
   closeDoc(): void {
     this.selectedSource = null;
     this.sourceDocumentLoading = false;
     this.clearSourceDocumentUrl();
   }
+
   safeSourceDocumentUrl(): SafeResourceUrl | null {
     return this.sourceDocumentUrl ? this.sanitizer.bypassSecurityTrustResourceUrl(this.sourceDocumentUrl) : null;
   }
