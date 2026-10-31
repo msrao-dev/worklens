@@ -40,6 +40,7 @@ from backend.rag import (
     ask_question,
     reset_collection,
     store_chunks,
+    collection
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -299,6 +300,18 @@ def reset_password(
 
 # --- Application Endpoints ---
 
+@app.get("/documents/stats")
+def get_document_stats(user = Depends(get_current_user)):
+    results = collection.get(include=["metadatas"])
+    metadatas = results.get("metadatas") or []
+
+    unique_sources = {m.get("source") for m in metadatas if m and m.get("source")}
+
+    return {
+        "count": len(unique_sources),
+        "documents": sorted(list(unique_sources))
+    }
+
 @app.get("/documents/{filename}")
 def get_document(filename: str, _current_user: dict = Depends(get_current_user)):
     safe_name = Path(filename).name
@@ -344,7 +357,6 @@ async def ingest(
         "status": "success",
         "chunks": len(chunks)
     }
-
 
 @app.post("/query")
 async def query(
