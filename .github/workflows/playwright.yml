@@ -27,8 +27,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Apply RAGAS compatibility fix
-        run: python -m pip install --no-deps "langchain-community==0.4.1"
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
@@ -73,7 +71,8 @@ jobs:
           python -m pip install "pip==24.3.1"
           python -m pip install --use-deprecated=legacy-resolver -r requirements.txt
 
-
+      - name: Apply RAGAS compatibility fix
+        run: python -m pip install --no-deps "langchain-community==0.4.1"
       - name: Debug RAGAS imports
         run: |
           python -c "import langchain_community, pathlib; p=pathlib.Path(langchain_community.__file__).parent; print('Package:', p); print('chat_models exists:', (p/'chat_models').exists()); print('vertexai.py exists:', (p/'chat_models'/'vertexai.py').exists())"
