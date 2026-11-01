@@ -70,12 +70,11 @@ jobs:
           python -m pip install "pip==24.3.1"
           python -m pip install --use-deprecated=legacy-resolver -r requirements.txt
 
+
       - name: Debug RAGAS imports
         run: |
-          python -m pip show langchain-community langchain-core langchain ragas
-          python -c "import importlib.util; print('VertexAI spec:', importlib.util.find_spec('langchain_community.chat_models.vertexai'))"
-          python -c "import langchain_community.chat_models.vertexai; print('VertexAI import OK')"
-          python -c "from ragas.embeddings import HuggingFaceEmbeddings; print('RAGAS embeddings import OK')"
+          python -c "import langchain_community, pathlib; p=pathlib.Path(langchain_community.__file__).parent; print('Package:', p); print('chat_models exists:', (p/'chat_models').exists()); print('vertexai.py exists:', (p/'chat_models'/'vertexai.py').exists())"
+
       - name: Run text smoke evaluation
         run: python evaluation/score_evaluation.py
 
