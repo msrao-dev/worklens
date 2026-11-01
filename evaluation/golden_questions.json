@@ -1,0 +1,314 @@
+[
+  {
+    "id": "EVAL001",
+    "question": "What is the deadline for submitting monthly reimbursement claims, and what happens if I miss it?",
+    "ground_truth": "Claims must be approved and submitted in GreytHR on or before the 25th of each month. Claims submitted after that deadline will be settled in the following month. Original supporting bills must also be submitted to HR.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL002",
+    "question": "What are the requirements for certification reimbursement?",
+    "ground_truth": "Employees must have worked at Tricon for more than six months and successfully completed probation. The certification must be completed successfully, registered using the official Tricon email ID, and approved before the training or exam starts. Reimbursement is normally capped at ₹10,000 per request, with special approval required above that amount. Up to five requests per financial year are allowed, within a total annual limit of ₹35,000.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "24-25"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL003",
+    "question": "How many individual KPIs should an employee have, and which competency areas must be represented?",
+    "ground_truth": "The KPI guidelines state that an employee should have no fewer than 6 and no more than 8 individual KPIs. At least one KPI each must cover Technical Competency and Behavioral Competency.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [
+      "5"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL004",
+    "question": "When is the annual compensation review conducted?",
+    "ground_truth": "The annual compensation review cycle runs from April to March, and the compensation review is conducted once a year in April.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [
+      "8"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL005",
+    "question": "What happens if an employee resigns within six months after receiving certification reimbursement?",
+    "ground_truth": "Under the standard recovery clause in the Certification & Variable Pay Policy, the employee agrees not to resign for six months from the date reimbursement is disbursed. If they resign within that period, the company may ask them to refund the entire amount or recover it from their Full and Final Settlement.",
+    "source_documents": [
+      "Certification & Variable Pay Policy"
+    ],
+    "evidence_pages": [
+      "1"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL006",
+    "question": "Can I install unauthorized software on my company laptop if I need it for work?",
+    "ground_truth": "No. The Laptop Issuance Policy says employees should not attempt to install software or hardware or change system configuration. The Acceptable Use Policy also prohibits downloading, installing, or using unauthorized software. A work-related purpose does not itself authorize the installation.",
+    "source_documents": [
+      "LAPTOP POLICY (1)",
+      "Cyber Security - Acceptable Use Policy"
+    ],
+    "evidence_pages": [
+      "Laptop Policy, page 1",
+      "Acceptable Use Policy, pages 1-2"
+    ],
+    "type": "Cross-document"
+  },
+  {
+    "id": "EVAL007",
+    "question": "Can I mention a Tricon customer by name in a LinkedIn post about my work?",
+    "ground_truth": "No. The Social Media Policy says employees must not mention the names of customers Tricon works with on social media profiles or during conversations on those platforms. Employees may disclose that they work for Tricon, but must protect customer confidentiality and sensitive information.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [
+      "1"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL008",
+    "question": "What should I do if I suspect a company laptop has been compromised?",
+    "ground_truth": "The Laptop Issuance Policy requires employees to protect their laptop and the information it contains, use a strong password, have antivirus installed, keep update notifications on, and use a firewall. The Acceptable Use Policy requires protection of confidential information and prohibits unauthorized access. These documents do not give a complete incident-response procedure or a specific escalation timeline; contact the appropriate IT/security authority promptly.",
+    "source_documents": [
+      "LAPTOP POLICY (1)",
+      "Cyber Security - Acceptable Use Policy"
+    ],
+    "evidence_pages": [
+      "Laptop Policy, page 1",
+      "Acceptable Use Policy, pages 1-2"
+    ],
+    "type": "Cross-document"
+  },
+  {
+    "id": "EVAL009",
+    "question": "How many sick leaves and casual leaves are available each year?",
+    "ground_truth": "Employees are eligible for 4 days of sick leave and 4 days of casual leave per calendar year, from January to December. These leave types cannot be carried forward to the next calendar year.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "13-14"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL010",
+    "question": "What are the requirements for weekend meal reimbursement?",
+    "ground_truth": "Employees must work six hours or more on the weekend, and the work must be approved by the reporting manager or client, preferably in advance or within one working day. Meal expenses are reimbursed at actuals up to ₹400 per person per day with actual bills.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "24"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL011",
+    "question": "What documents should be included in a medical reimbursement claim?",
+    "ground_truth": "The checklist asks for a completed and signed claim form showing the claimed amount; original discharge card or summary; original final hospital bill with itemized charges; original hospital receipt; hospital details on letterhead including registration number and bed count; original hospital, pharmacy, and doctor bills; prescriptions; relevant investigation reports; and, for road traffic accidents, a police-attested FIR and Medico Legal Certificate. Attach the checklist and arrange documents in its listed order.",
+    "source_documents": [
+      "Reimbursement Claim Checklist"
+    ],
+    "evidence_pages": [
+      "1"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL012",
+    "question": "What are the rating bands for a performance score of 4.5?",
+    "ground_truth": "A score of 4.5 falls in the 'Supersedes Expectation' band, which covers scores from 4.5 to 5.00.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL013",
+    "question": "What is the company's Wi-Fi password according to the employee handbook and acceptable-use policy?",
+    "ground_truth": "Neither the Employee Handbook nor the Acceptable Use Policy provides the company's Wi-Fi password. The employee should contact the appropriate IT support channel for access.",
+    "source_documents": [
+      "Employee Handbook September 2026",
+      "Cyber Security - Acceptable Use Policy"
+    ],
+    "evidence_pages": [
+      "Not specified"
+    ],
+    "type": "Unanswerable / Cross-document"
+  },
+  {
+    "id": "EVAL014",
+    "question": "I want to claim certification reimbursement for a ₹15,000 certification. The handbook and the separate certification policy appear to have different recovery thresholds. What should I conclude?",
+    "ground_truth": "The Employee Handbook states that a single certification reimbursement costing more than ₹10,000 falls under a 12-month recovery clause. The separate Certification & Variable Pay Policy states that its special 12-month clause applies when a single certification reimbursement cost is more than ₹20,000, while its standard clause specifies six months. The documents therefore differ for a ₹15,000 claim. They do not say which policy takes precedence, so the employee should ask HR or management for clarification rather than assume one rule overrides the other.",
+    "source_documents": [
+      "Employee Handbook September 2026",
+      "Certification & Variable Pay Policy"
+    ],
+    "evidence_pages": [
+      "Employee Handbook, page 25",
+      "Certification & Variable Pay Policy, page 1"
+    ],
+    "type": "Conflict Detection / Cross-document"
+  },
+  {
+    "id": "EVAL015",
+    "question": "If I receive a performance rating of 4.5, can I determine my exact salary increment and variable-pay percentage from the documents?",
+    "ground_truth": "No. The Performance Management Process document places a score of 4.5 in the 'Supersedes Expectation' rating band and says performance assessment is one input to the annual compensation review, held in April. The Variable Pay Policy says variable pay is assessed quarterly or annually according to the salary structure discussed at joining and depends on management's decision and the applicable company scheme. Neither document specifies an exact salary-increment percentage or a universal variable-pay percentage for a 4.5 rating.",
+    "source_documents": [
+      "Performance Management Process",
+      "Certification & Variable Pay Policy"
+    ],
+    "evidence_pages": [
+      "Performance Management Process, pages 8 and 11",
+      "Certification & Variable Pay Policy, page 2"
+    ],
+    "type": "Cross-document / Unanswerable"
+  },
+  {
+    "id": "EVAL016",
+    "question": "I want to apply for maternity leave and submit a medical reimbursement claim. What does each form require?",
+    "ground_truth": "The Maternity Leave Application Form asks for personal details, leave type, start date, return date, remarks, applicant signature, recommending authority, and approving authority. It lists up to eight weeks before childbirth and up to 18 weeks after childbirth and asks for medical certificates for the periods mentioned. The Reimbursement Claim Checklist asks for a signed claim form and supporting medical documents such as the original discharge card or summary, itemized original hospital bill, original hospital receipt, hospital details, original bills, prescriptions, and relevant investigation reports. The maternity form does not define reimbursement documentation, and the reimbursement checklist does not define maternity-leave entitlement.",
+    "source_documents": [
+      "Maternity Leave Application Form",
+      "Reimbursement Claim Checklist"
+    ],
+    "evidence_pages": [
+      "Maternity Leave Application Form, page 1",
+      "Reimbursement Claim Checklist, page 1"
+    ],
+    "type": "Cross-document"
+  },
+  {
+    "id": "EVAL017",
+    "question": "What should I do before posting on social media, and what confidentiality rules apply?",
+    "ground_truth": "Employees should double-check content for accuracy and ensure it complies with confidentiality terms and applicable restrictions. They must not name Tricon customers on social media profiles or in conversations, and must not share private or sensitive information about Tricon employees, clients, partners, or stakeholders. Employees may speak on behalf of Tricon only if officially authorized.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [
+      "1"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL018",
+    "question": "What information and documents are required on the maternity leave application form?",
+    "ground_truth": "The form asks for first name, middle name, last name, maternity leave type, start date, return date, remarks if any, applicant signature, recommending authority, approving authority, and an HR-use-only section. It lists leave prior to childbirth for a maximum of eight weeks and leave post childbirth for a maximum of 18 weeks, and says medical certificates are required for the mentioned periods.",
+    "source_documents": [
+      "Maternity Leave Application Form"
+    ],
+    "evidence_pages": [
+      "1"
+    ],
+    "type": "Direct"
+  },
+  {
+    "id": "EVAL019",
+    "question": "Can I determine the exact penalty for a first-time violation of the Acceptable Use Policy?",
+    "ground_truth": "No. The Acceptable Use Policy says violations may lead to disciplinary action up to and including termination of employment and legal action, but it does not specify a fixed penalty for a first-time violation.",
+    "source_documents": [
+      "Cyber Security - Acceptable Use Policy"
+    ],
+    "evidence_pages": [
+      "2"
+    ],
+    "type": "Unanswerable"
+  },
+  {
+    "id": "EVAL020",
+    "question": "I am leaving Tricon after receiving certification reimbursement and manage a business-related social media account. What restrictions should I check?",
+    "ground_truth": "The Certification & Variable Pay Policy says an employee should not resign within six months of certification reimbursement disbursement; for a single certification reimbursement costing more than ₹20,000 under its special-approval clause, the stated period is 12 months. The company may ask for a refund if the employee resigns within the applicable period. The Social Media Policy says a business-related account used as part of the job or created for Tricon may be company property. The employee must not change its password or account name, create a similar-sounding account, or claim ownership of its contacts and connections when leaving.",
+    "source_documents": [
+      "Certification & Variable Pay Policy",
+      "Social Media Policy"
+    ],
+    "evidence_pages": [
+      "Certification & Variable Pay Policy, page 1",
+      "Social Media Policy, page 1"
+    ],
+    "type": "Cross-document"
+  },
+  {
+    "id": "IMG008",
+    "question": "I am submitting this restaurant bill for a team lunch attended by 4 people on 15 October 2026. How much can I claim for reimbursement? Check the company policy documents, calculate the per-person bill amount, verify the bill arithmetic, and explain the maximum eligible claim with the policy justification.",
+    "ground_truth": "The bill total shown is ₹4,400 for 4 people, giving a displayed per-person amount of ₹1,100. The stated policy limit is ₹900 per person, so the maximum eligible claim for 4 people is ₹3,600, subject to the team-lunch eligibility requirements. The bill arithmetic is inconsistent: ₹4,720 minus the ₹500 discount equals ₹4,220, and adding ₹211 tax gives ₹4,431 rather than ₹4,400. The claim requires review because of this discrepancy.",
+    "image": "evaluation/images/restaurant_bill_img8.png",
+    "task_type": "reimbursement_calculation",
+    "expected_answer": {
+      "bill_total": 4400,
+      "people_count": 4,
+      "per_person_amount": 1100,
+      "policy_limit_per_person": 900,
+      "policy_maximum": 3600,
+      "bill_arithmetic_consistent": false,
+      "claim_status": "requires_review"
+    },
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "Verify the relevant policy page"
+    ],
+    "type": "Image / Reimbursement Calculation"
+  },
+  {
+    "id": "IMG009",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a graphic T-shirt, distressed jeans, and sneakers. Whether this outfit is permitted must be determined by checking the company's dress code policy. Evaluate each item against the specific policy requirements, including any restrictions on graphic designs or messages, distressed jeans, and sneakers. Explain which rules the outfit follows or violates, and do not conclude that it is prohibited unless the policy supports that conclusion.",
+    "image": "evaluation/images/casual_wear_men_img4.png",
+    "task_type": "dress_code_validation",
+    "expected_answer": {
+      "decision": "policy_dependent",
+      "reason": "Evaluate the graphic T-shirt, distressed jeans, and sneakers against the company's dress code policy."
+    },
+    "source_documents": [
+      "Company Dress Code Policy (verify exact document name)"
+    ],
+    "evidence_pages": [
+      "Verify the relevant dress-code policy page"
+    ],
+    "type": "Image / Policy Validation"
+  },
+  {
+    "id": "IMG010",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain whether the shirt, trousers, and formal shoes meet the requirements.",
+    "ground_truth": "The image shows a formal shirt, trousers, and formal shoes. Assess these items against the company's written dress code policy. Explain whether the shirt, trousers, and formal shoes meet the stated requirements, identifying any applicable restrictions or requirements. Do not assume that the outfit is compliant solely because it appears formal.",
+    "image": "evaluation/images/formal_shirt_trouser_img1.png",
+    "task_type": "dress_code_validation",
+    "expected_answer": {
+      "decision": "policy_dependent",
+      "reason": "Evaluate the formal shirt, trousers, and formal shoes against the company's dress code policy."
+    },
+    "source_documents": [
+      "Company Dress Code Policy (verify exact document name)"
+    ],
+    "evidence_pages": [
+      "Verify the relevant dress-code policy page"
+    ],
+    "type": "Image / Policy Validation"
+  }
+]
