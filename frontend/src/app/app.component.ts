@@ -1,9 +1,9 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { SafeHtmlPipe } from './safe-html.pipe';
+import { SafeHtmlPipe, CleanHtmlPipe, renderMarkdown } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
 import { environment } from '../environments/environment';
@@ -50,7 +50,14 @@ const HISTORY_KEY = 'wl-history';
 const HISTORY_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 3;
+/** Image types the backend accepts as-is. */
 const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
+/** For files the OS gives no MIME type (e.g. HEIC on Windows). */
+const IMAGE_EXT = /\.(jpe?g|jfif|png|webp|gif|bmp|svg|ico|avif|heic|heif|tiff?)$/i;
+/** Converted images are scaled down to fit within this many pixels on the long side. */
+const MAX_IMAGE_SIDE = 4096;
+/** Keeps the mailto: link under the ~2000 characters Windows accepts. */
+const MAX_QUESTION_IN_EMAIL = 500;
 /** Typing animation: one tick every TYPE_TICK_MS, finishing long answers in roughly TYPE_MAX_MS. */
 const TYPE_TICK_MS = 16;
 const TYPE_MAX_MS = 4000;
@@ -58,10 +65,10 @@ const TYPE_MAX_MS = 4000;
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, SafeHtmlPipe, LoginComponent],
+  imports: [CommonModule, FormsModule, SafeHtmlPipe, CleanHtmlPipe, LoginComponent],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
+export class AppComponent implements AfterViewChecked, OnDestroy {
   user: User | null = this.loadUser();
   history: string[] = this.loadHistory();
   messages: Msg[] = [];
@@ -77,7 +84,8 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   sourceDocumentLoading = false;
   toastMsg = '';
   toastShow = false;
-  docCount = 0;
+  /** Optional button shown in the toast, e.g. "Use Outlook app". */
+  toastAction: { label: string; run: () => void } | null = null;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   private currentAudio: HTMLAudioElement | null = null;
@@ -97,10 +105,10 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   private backendUrl = environment.apiUrl || 'http://127.0.0.1:8000';
   private apiUrl = this.backendUrl + '/query';
   private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
-  private statsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/documents/stats';
   private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
+  @ViewChild('questionBox') questionBox?: ElementRef<HTMLTextAreaElement>;
 
   constructor(private zone: NgZone) {
     try {
@@ -111,33 +119,6 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
       this.dark = false;
     }
     this.applyTheme();
-  }
-
-  
-  ngOnInit(): void {
-    if (this.user) {
-      this.fetchDocStats();
-    }
-  }
-
-  fetchDocStats(): void {
-    if (this.useMock) {
-      this.docCount = 12;
-      return;
-    }
-    const headers = new HttpHeaders({
-      Authorization: `Bearer ${this.user?.token || ""}`
-    });
-    this.http.get<{ count: number }>(this.statsUrl, { headers }).subscribe({
-      next: (res) => {
-        if (typeof res.count === "number") {
-          this.docCount = res.count;
-        }
-      },
-      error: () => {
-        this.docCount = 0;
-      }
-    });
   }
 
   ngAfterViewChecked(): void {
@@ -183,7 +164,6 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   onLogin(user: User): void {
     this.user = user;
-    this.fetchDocStats();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {}
@@ -206,6 +186,19 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     } catch {
       return null;
     }
+  }
+
+  /** Starts a fresh conversation; earlier messages are no longer sent as context. */
+  newChat(): void {
+    this.stopSpeaking();
+    this.finishTyping();
+    for (const m of this.messages) for (const f of m.files || []) if (f.url) URL.revokeObjectURL(f.url);
+    for (const f of this.pending) if (f.url) URL.revokeObjectURL(f.url);
+    this.messages = [];
+    this.pending = [];
+    this.input = '';
+    this.railOpen = false;
+    setTimeout(() => this.questionBox?.nativeElement.focus());
   }
 
   isStale(updated: string): boolean {
@@ -563,9 +556,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   // --- Typing animation ----------------------------------------------------
 
   private replyHtml(m: Msg): string {
-    if (m.entry) return m.entry.answer;
+    if (m.entry) return renderMarkdown(m.entry.answer);
     if (m.fallback) return FALLBACK_PARAS.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
-    if (m.note) return `<p>${escapeHtml(m.note)}</p>`;
+    if (m.note) return renderMarkdown(m.note);
     return '';
   }
 
@@ -698,18 +691,36 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.addFiles(e.dataTransfer?.files);
   }
 
-  private addFiles(files: FileList | null | undefined): void {
-    for (const f of Array.from(files || [])) {
-      if (!IMAGE_TYPES.includes(f.type)) {
-        this.toast('Only images can be attached (JPG, PNG or WebP).');
+  /** Ctrl+V of a screenshot attaches it; pasting text still works as normal. */
+  onPaste(e: ClipboardEvent): void {
+    const images = Array.from(e.clipboardData?.items || [])
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter((f): f is File => !!f)
+      .map((f) => new File([f], `screenshot-${Date.now()}.${f.type.split('/')[1] || 'png'}`, { type: f.type }));
+    if (!images.length) return;
+    e.preventDefault();
+    this.addFiles(images);
+  }
+
+  private async addFiles(files: FileList | File[] | null | undefined): Promise<void> {
+    for (const original of Array.from(files || [])) {
+      if (!original.type.startsWith('image/') && !IMAGE_EXT.test(original.name)) {
+        this.toast('Only images can be attached.');
         continue;
       }
       if (this.pending.length >= MAX_IMAGES) {
         this.toast('You can attach up to 3 images per question.');
         break;
       }
+      // The backend accepts JPG, PNG and WebP; convert anything else in the browser.
+      const f = IMAGE_TYPES.includes(original.type) ? original : await toPng(original);
+      if (!f) {
+        this.toast(`Couldn’t read ${original.name}. Try saving it as JPG or PNG.`);
+        continue;
+      }
       if (f.size > MAX_FILE_BYTES) {
-        this.toast(`${f.name} is over 10 MB`);
+        this.toast(`${original.name} is over 10 MB`);
         continue;
       }
       this.pending.push({ name: f.name, url: URL.createObjectURL(f), file: f });
@@ -732,8 +743,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   private plainText(m: Msg): string {
     if (m.fallback) return FALLBACK_PARAS.join(' ');
-    if (m.note) return m.note;
-    const raw = m.entry?.answer || '';
+    const raw = m.note || m.entry?.answer || '';
     // Strip markdown formatting characters (*, _, #, `, []) for cleaner read-aloud and export
     const cleanMarkdown = raw
       .replace(/[*_]{1,3}/g, '')
@@ -882,8 +892,49 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     }
   }
 
-  askHuman(): void {
-    this.toast('Routed to the HR Helpdesk · you’ll get a reply by email (demo)');
+  /**
+   * Opens an email to HR asking the user's question, in Outlook on the web (works on any computer signed in
+   * to the company Microsoft account). The toast offers the desktop Outlook app instead, via mailto:, for
+   * machines where Outlook is the default email app.
+   */
+  askHuman(m: Msg): void {
+    const to = environment.helpdeskEmail;
+    // Windows silently drops mailto: links over ~2000 characters, so keep a very long question in check.
+    let question = (m.q || this.questionFor(m) || '').trim();
+    if (question.length > MAX_QUESTION_IN_EMAIL) question = question.slice(0, MAX_QUESTION_IN_EMAIL).trimEnd() + '…';
+    const subject = question
+      ? `Query: ${question.length > 80 ? question.slice(0, 80).trimEnd() + '…' : question}`
+      : 'Query for HR';
+    const body = [
+      'Hello HR Team,',
+      '',
+      'I have a query and would appreciate your help:',
+      '',
+      question || '(please describe your query here)',
+      '',
+      'Could you please help me with this?',
+      '',
+      'Thank you,',
+      this.user?.name || '',
+      this.user?.email || ''
+    ].join('\n');
+    const s = encodeURIComponent(subject);
+    const b = encodeURIComponent(body);
+
+    window.open(
+      `https://outlook.office.com/mail/deeplink/compose?to=${encodeURIComponent(to)}&subject=${s}&body=${b}`,
+      '_blank',
+      'noopener'
+    );
+    const link = `mailto:${to}?subject=${s}&body=${b}`;
+    this.toast('Opening Outlook on the web…', { label: 'Use Outlook app', run: () => (window.location.href = link) });
+  }
+
+  /** The user question a reply answers: the nearest user message before it. */
+  private questionFor(m: Msg): string {
+    const i = this.messages.indexOf(m);
+    for (let j = i - 1; j >= 0; j--) if (this.messages[j].role === 'user') return this.messages[j].text || '';
+    return '';
   }
 
   toggleTheme(): void {
@@ -898,16 +949,64 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     document.documentElement.setAttribute('data-theme', this.dark ? 'dark' : 'light');
   }
 
-  toast(msg: string): void {
+  toast(msg: string, action?: { label: string; run: () => void }): void {
     this.toastMsg = msg;
+    this.toastAction = action || null;
     this.toastShow = true;
     clearTimeout(this.toastT);
-    this.toastT = setTimeout(() => (this.toastShow = false), 2600);
+    // Leave time to click the action button.
+    this.toastT = setTimeout(() => (this.toastShow = false), action ? 8000 : 2600);
+  }
+
+  runToastAction(): void {
+    this.toastAction?.run();
+    this.toastShow = false;
   }
 
   trackByIndex(i: number): number {
     return i;
   }
+}
+
+/**
+ * Re-encodes an image the browser can display (GIF, BMP, SVG, AVIF, ICO…) as PNG, falling back to JPEG
+ * if the PNG is too large. Resolves null when the browser can't decode the format (e.g. HEIC in Chrome).
+ */
+function toPng(file: File): Promise<File | null> {
+  return new Promise((resolve) => {
+    const src = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      // SVGs without a size report 0; give them a sensible default.
+      let w = img.naturalWidth || 1024;
+      let h = img.naturalHeight || 1024;
+      const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(w, h));
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(src);
+      const base = file.name.replace(/\.[^.]+$/, '') || 'image';
+      canvas.toBlob((png) => {
+        if (png && png.size <= MAX_FILE_BYTES) {
+          resolve(new File([png], `${base}.png`, { type: 'image/png' }));
+          return;
+        }
+        canvas.toBlob(
+          (jpg) => resolve(jpg ? new File([jpg], `${base}.jpg`, { type: 'image/jpeg' }) : null),
+          'image/jpeg',
+          0.9
+        );
+      }, 'image/png');
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(src);
+      resolve(null);
+    };
+    img.src = src;
+  });
 }
 
 function escapeHtml(s: string): string {
