@@ -74,7 +74,8 @@ jobs:
       - name: Debug RAGAS imports
         run: |
           python -c "import langchain_community, pathlib; p=pathlib.Path(langchain_community.__file__).parent; print('Package:', p); print('chat_models exists:', (p/'chat_models').exists()); print('vertexai.py exists:', (p/'chat_models'/'vertexai.py').exists())"
-
+          python -c "import langchain_community.chat_models.vertexai; print('VertexAI import OK')"
+          python -c "from ragas.embeddings import HuggingFaceEmbeddings; print('RAGAS embeddings import OK')"
       - name: Run text smoke evaluation
         run: python evaluation/score_evaluation.py
 
