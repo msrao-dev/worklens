@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Apply RAGAS compatibility fix
+        run: python -m pip install --no-deps "langchain-community==0.4.1"
+
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
 
