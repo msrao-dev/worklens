@@ -12,6 +12,7 @@ export interface Source {
   fresh: boolean;
   passage: string; // HTML; <mark> wraps the exact cited span
   pageNumber?: number;
+  documentName?: string;
   lineStart?: number;
   lineEnd?: number;
 }

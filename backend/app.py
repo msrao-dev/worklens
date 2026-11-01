@@ -8,11 +8,14 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
+from pathlib import Path
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
 from backend.tts import synthesize_speech, cleanup_audio_cache
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -38,6 +41,7 @@ from backend.rag import (
     ask_question,
     reset_collection,
     store_chunks,
+    collection
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -297,6 +301,35 @@ def reset_password(
 
 # --- Application Endpoints ---
 
+@app.get("/documents/stats")
+def get_document_stats(user = Depends(get_current_user)):
+    results = collection.get(include=["metadatas"])
+    metadatas = results.get("metadatas") or []
+
+    unique_sources = {m.get("source") for m in metadatas if m and m.get("source")}
+
+    return {
+        "count": len(unique_sources),
+        "documents": sorted(list(unique_sources))
+    }
+
+@app.get("/documents/{filename}")
+def get_document(filename: str, _current_user: dict = Depends(get_current_user)):
+    safe_name = Path(filename).name
+    filepath = Path(UPLOAD_DIR).resolve() / safe_name
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if filepath.suffix.lower() not in {".pdf", ".docx", ".txt"}:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    return FileResponse(
+        path=str(filepath),
+        filename=safe_name,
+        media_type="application/pdf" if filepath.suffix.lower() == ".pdf" else "application/octet-stream",
+        content_disposition_type="inline" if filepath.suffix.lower() == ".pdf" else "attachment",
+    )
+
+
 @app.post("/ingest")
 async def ingest(
     file: UploadFile = File(...),
@@ -305,7 +338,10 @@ async def ingest(
     if not file.filename:
         raise HTTPException(status_code=422, detail="A filename is required.")
 
-    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    safe_name = Path(file.filename).name
+    if not safe_name:
+        raise HTTPException(status_code=422, detail="A filename is required.")
+    filepath = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(filepath, "wb") as f:
         f.write(await file.read())
@@ -316,13 +352,12 @@ async def ingest(
             status_code=422,
             detail="No extractable text was found in the uploaded document.",
         )
-    store_chunks(chunks, filename=file.filename)
+    store_chunks(chunks, filename=safe_name)
 
     return {
         "status": "success",
         "chunks": len(chunks)
     }
-
 
 @app.post("/query")
 async def query(
@@ -424,7 +459,7 @@ async def reset(_current_user: dict = Depends(require_hr_user)):
     return {"status": "success"}
 
 @app.post("/audio/tts")
-def text_to_speech(
+async def text_to_speech(
     payload: TTSRequest,
     background_tasks: BackgroundTasks,
     _current_user: dict = Depends(get_current_user),
@@ -438,7 +473,8 @@ def text_to_speech(
     if voice not in ("amy", "ryan"):
         voice = "amy"
 
-    wav_bytes, _ = synthesize_speech(text, voice_name=voice)
+    # Offload the chunked CPU synthesis so Uvicorn can still respond to health checks
+    wav_bytes, _ = await run_in_threadpool(synthesize_speech, text, voice_name=voice)
 
     # Trigger post-response cleanup in the background
     background_tasks.add_task(cleanup_audio_cache)

@@ -31,22 +31,41 @@ _SYNTHESIS_LOCK = threading.Lock()
 
 def sanitize_text_for_speech(text: str) -> str:
     """Strips markdown syntax, headers, code, and HTML tags for smooth vocal delivery."""
-    # Strip HTML tags like <mark>, <code>, <p>, <li>
     text = re.sub(r"<[^>]+>", " ", text)
-    # Strip markdown links [label](url) -> label
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
-    # Strip bold/italic formatting (*, **, _, __)
     text = re.sub(r"[*_]{1,3}", "", text)
-    # Strip markdown headers (#, ##, etc.)
     text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
-    # Strip bullet indicators and list numbers
     text = re.sub(r"^\s*[-*•]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
-    # Strip inline code formatting
     text = re.sub(r"`([^`]+)`", r"\1", text)
-    # Collapse multiple whitespaces/newlines
     text = re.sub(r"\s+", " ", text).strip()
     return text
+
+
+def split_into_sentence_chunks(text: str, max_chunk_chars: int = 180) -> list[str]:
+    """Splits text along sentence boundaries to keep individual synthesis steps fast."""
+    raw_sentences = re.split(r"(?<=[.!?])\s+", text)
+    chunks: list[str] = []
+    current_chunk: list[str] = []
+    current_len = 0
+
+    for sent in raw_sentences:
+        sent = sent.strip()
+        if not sent:
+            continue
+
+        if current_len + len(sent) > max_chunk_chars and current_chunk:
+            chunks.append(" ".join(current_chunk))
+            current_chunk = [sent]
+            current_len = len(sent)
+        else:
+            current_chunk.append(sent)
+            current_len += len(sent) + 1
+
+    if current_chunk:
+        chunks.append(" ".join(current_chunk))
+
+    return chunks if chunks else [text]
 
 
 def get_voice_instance(voice_name: str):
@@ -77,7 +96,7 @@ def get_cache_path(voice_name: str, sanitized_text: str) -> str:
 
 
 def synthesize_speech(text: str, voice_name: str = "amy") -> tuple[bytes, str]:
-    """Returns (wav_bytes, file_path) using disk caching."""
+    """Synthesizes text in sentence chunks, merges the frames, and caches the result."""
     clean_text = sanitize_text_for_speech(text)
     if not clean_text:
         clean_text = "Nothing to read."
@@ -91,16 +110,30 @@ def synthesize_speech(text: str, voice_name: str = "amy") -> tuple[bytes, str]:
             logger.warning("Failed reading cached audio file: %s. Re-synthesizing.", cached_file)
 
     voice = get_voice_instance(voice_name)
-    buffer = io.BytesIO()
+    chunks = split_into_sentence_chunks(clean_text, max_chunk_chars=180)
 
-    # Piper C/espeak engine requires synchronization under concurrent calls
-    with _SYNTHESIS_LOCK:
-        with wave.open(buffer, "wb") as wav_file:
-            voice.synthesize_wav(clean_text, wav_file)
+    combined_frames = bytearray()
+    wav_params = None
 
-    wav_bytes = buffer.getvalue()
+    for chunk in chunks:
+        chunk_buffer = io.BytesIO()
+        with _SYNTHESIS_LOCK:
+            with wave.open(chunk_buffer, "wb") as chunk_wav:
+                voice.synthesize_wav(chunk, chunk_wav)
 
-    # Save to ephemeral cache
+        chunk_buffer.seek(0)
+        with wave.open(chunk_buffer, "rb") as read_wav:
+            if wav_params is None:
+                wav_params = read_wav.getparams()
+            combined_frames.extend(read_wav.readframes(read_wav.getnframes()))
+
+    out_buffer = io.BytesIO()
+    with wave.open(out_buffer, "wb") as merged_wav:
+        merged_wav.setparams(wav_params)
+        merged_wav.writeframes(combined_frames)
+
+    wav_bytes = out_buffer.getvalue()
+
     try:
         with open(cached_file, "wb") as f:
             f.write(wav_bytes)
@@ -119,7 +152,6 @@ def cleanup_audio_cache():
         for entry in os.scandir(CACHE_DIR):
             if entry.is_file() and entry.name.endswith(".wav"):
                 stat = entry.stat()
-                # Rule 1: Delete files older than 1 hour (3600 seconds)
                 if now - stat.st_mtime > 3600:
                     try:
                         os.remove(entry.path)
@@ -128,13 +160,11 @@ def cleanup_audio_cache():
                 else:
                     files.append((entry.path, stat.st_size, stat.st_mtime))
 
-        # Rule 2: If size > 100MB, delete oldest files until under 50MB
         total_size = sum(f[1] for f in files)
         max_bytes = 100 * 1024 * 1024
         target_bytes = 50 * 1024 * 1024
 
         if total_size > max_bytes:
-            # Sort by modification time ascending (oldest first)
             files.sort(key=lambda x: x[2])
             for path, size, _ in files:
                 try:
