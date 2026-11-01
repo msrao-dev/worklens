@@ -73,7 +73,8 @@ jobs:
       - name: Debug RAGAS imports
         run: |
           python -m pip show langchain-community langchain-core langchain ragas
-          python -c "import importlib.util; print(importlib.util.find_spec('langchain_community.chat_models.vertexai'))"
+          python -c "import importlib.util; print('VertexAI spec:', importlib.util.find_spec('langchain_community.chat_models.vertexai'))"
+          python -c "import langchain_community.chat_models.vertexai; print('VertexAI import OK')"
           python -c "from ragas.embeddings import HuggingFaceEmbeddings; print('RAGAS embeddings import OK')"
       - name: Run text smoke evaluation
         run: python evaluation/score_evaluation.py
