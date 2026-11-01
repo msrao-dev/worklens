@@ -3,6 +3,28 @@ import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
+marked.use({ gfm: true, breaks: true });
+
+const PURIFY_OPTIONS = {
+  ADD_TAGS: ['mark'],
+  ADD_ATTR: ['target', 'rel']
+};
+
+// Links in answers open in a new tab so the chat isn't lost.
+DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+  if (node.tagName === 'A' && node.getAttribute('href')) {
+    node.setAttribute('target', '_blank');
+    node.setAttribute('rel', 'noopener noreferrer');
+  }
+});
+
+/** Markdown -> sanitized HTML. Safe to insert into the page. */
+export function renderMarkdown(value: string): string {
+  if (!value) return '';
+  const rawHtml = marked.parse(value, { async: false }) as string;
+  return DOMPurify.sanitize(rawHtml, PURIFY_OPTIONS) as string;
+}
+
 /**
  * Parses markdown into HTML and sanitizes the output with DOMPurify
  * so that formatting tags like <strong>, <em>, <ul>, <ol>, <code>, and <mark>
@@ -10,26 +32,19 @@ import DOMPurify from 'dompurify';
  */
 @Pipe({ name: 'safeHtml', standalone: true })
 export class SafeHtmlPipe implements PipeTransform {
-  constructor(private sanitizer: DomSanitizer) {
-    marked.setOptions({
-      gfm: true,
-      breaks: true
-    });
-  }
+  constructor(private sanitizer: DomSanitizer) {}
 
   transform(value: string): SafeHtml {
-    if (!value) return '';
+    return value ? this.sanitizer.bypassSecurityTrustHtml(renderMarkdown(value)) : '';
+  }
+}
 
-    // 1. Convert Markdown to HTML
-    const rawHtml = marked.parse(value, { async: false }) as string;
+/** Sanitizes HTML that is already rendered (e.g. a reply mid-typing) without parsing it as markdown again. */
+@Pipe({ name: 'cleanHtml', standalone: true })
+export class CleanHtmlPipe implements PipeTransform {
+  constructor(private sanitizer: DomSanitizer) {}
 
-    // 2. Sanitize to strip scripts, event handlers, and malicious tags
-    const cleanHtml = DOMPurify.sanitize(rawHtml, {
-      ADD_TAGS: ['mark'],
-      ADD_ATTR: ['target', 'rel']
-    });
-
-    // 3. Mark the sanitized string as trusted for Angular
-    return this.sanitizer.bypassSecurityTrustHtml(cleanHtml);
+  transform(value: string | undefined): SafeHtml {
+    return value ? this.sanitizer.bypassSecurityTrustHtml(DOMPurify.sanitize(value, PURIFY_OPTIONS) as string) : '';
   }
 }

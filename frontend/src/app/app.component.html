@@ -16,6 +16,10 @@
       <div class="brand-name">Work<span>Lens</span></div>
       <div class="tagline">Find it. Fast.</div>
     </div>
+    <button class="new-chat" (click)="newChat()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+      <span>New chat</span>
+    </button>
     <div class="rail-scroll">
       <div class="rail-label rail-label-row">
         <span>History</span>
@@ -30,7 +34,6 @@
       </div>
     </div>
     <div class="rail-foot">
-      <div class="idx"><b>{{ docCount }}</b> {{ docCount === 1 ? "document" : "documents" }} indexed<br />HR · IT · Facilities · Finance</div>
       <button class="icon-btn" (click)="logout()" title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
@@ -110,7 +113,8 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
                   Answered for {{ user.role }} · Bengaluru
                 </div>
-                <div class="answer" [innerHTML]="(m.streaming ? m.typed || '' : e.answer) | safeHtml"></div>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
+                <div class="answer" *ngIf="!m.streaming" [innerHTML]="e.answer | safeHtml"></div>
 
                 <div class="reveal" *ngIf="!m.streaming">
                 <div class="sources" *ngIf="e.sources?.length">
@@ -148,7 +152,7 @@
                 </div>
 
                 <div style="margin-top:8px" *ngIf="e.conf !== 'high'">
-                  <button class="ask-human" (click)="askHuman()">This is a general answer — ask a human to confirm your case</button>
+                  <button class="ask-human" (click)="askHuman(m)">This is a general answer — ask a human to confirm your case</button>
                 </div>
 
                 <ng-container *ngTemplateOutlet="followupsTpl; context: { $implicit: m }"></ng-container>
@@ -157,14 +161,14 @@
 
               <!-- Fallback / honest "I don't know" -->
               <ng-container *ngIf="m.fallback">
-                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
                 <div class="answer" *ngIf="!m.streaming">
                   <p *ngFor="let p of fallbackParas; trackBy: trackByIndex">{{ p }}</p>
                 </div>
                 <div class="reveal" *ngIf="!m.streaming">
                 <div class="meta">
                   <div class="acts" style="margin-left:0">
-                    <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman()">
+                    <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman(m)" title="Opens your email app with the details filled in">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="width:14px;height:14px"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
                       Route this to the right team
                     </button>
@@ -183,8 +187,8 @@
 
               <!-- Plain note, e.g. upload acknowledgement -->
               <ng-container *ngIf="m.note">
-                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
-                <div class="answer" *ngIf="!m.streaming"><p>{{ m.note }}</p></div>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
+                <div class="answer" *ngIf="!m.streaming" [innerHTML]="m.note | safeHtml"></div>
                 <div class="reveal" *ngIf="!m.streaming">
                   <div class="meta">
                     <div class="acts">
@@ -203,7 +207,7 @@
     <div class="composer-wrap">
       <form class="composer" [class.dragging]="dragging" (ngSubmit)="send()"
         (dragenter)="onDragOver($event)" (dragover)="onDragOver($event)"
-        (dragleave)="onDragLeave($event)" (drop)="onDrop($event)">
+        (dragleave)="onDragLeave($event)" (drop)="onDrop($event)" (paste)="onPaste($event)">
         <div class="drop-hint" *ngIf="dragging">Drop an image to attach</div>
         <div class="pending" *ngIf="pending.length">
           <span class="pending-item" *ngFor="let f of pending; let i = index; trackBy: trackByIndex">
@@ -215,11 +219,12 @@
             </button>
           </span>
         </div>
-        <button type="button" class="attach" (click)="fileInput.click()" title="Attach or drag & drop an image (JPG, PNG, WebP)" aria-label="Attach image">
+        <button type="button" class="attach" (click)="fileInput.click()" title="Attach an image — or drag & drop, or paste a screenshot (Ctrl+V)" aria-label="Attach image">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         </button>
-        <input #fileInput type="file" multiple hidden accept="image/jpeg,image/png,image/webp" (change)="onFiles(fileInput)" />
+        <input #fileInput type="file" multiple hidden accept="image/*,.heic,.heif" (change)="onFiles(fileInput)" />
         <textarea
+          #questionBox
           [(ngModel)]="input"
           name="q"
           rows="1"
@@ -301,4 +306,5 @@
 <div class="toast" [class.show]="toastShow">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
   <span>{{ toastMsg }}</span>
+  <button class="toast-action" *ngIf="toastAction" type="button" (click)="runToastAction()">{{ toastAction.label }}</button>
 </div>

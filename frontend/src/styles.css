@@ -81,8 +81,11 @@ button{font-family:inherit;cursor:pointer}
 .history-empty{font-size:12.5px;color:var(--ink-faint);padding:4px 10px}
 .rail-foot{border-top:1px solid var(--line);padding:12px 18px;display:flex;align-items:center;
   justify-content:space-between;gap:8px}
-.idx{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);line-height:1.4}
-.idx b{color:var(--brand);font-weight:500}
+.new-chat{display:flex;align-items:center;gap:9px;margin:2px 14px 6px;padding:10px 12px;border-radius:11px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13.5px;font-weight:600;
+  box-shadow:var(--shadow);transition:.14s}
+.new-chat:hover{border-color:var(--brand);color:var(--brand)}
+.new-chat svg{width:15px;height:15px;color:var(--brand)}
 
 /* ---------- Main ---------- */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
@@ -126,14 +129,32 @@ button{font-family:inherit;cursor:pointer}
 .bot .bubble p{margin:0 0 10px}
 .bot .bubble p:last-of-type{margin-bottom:0}
 .bot .bubble strong{color:var(--ink);font-weight:700}
-.answer ul, .answer ol{margin:6px 0 12px;padding-left:20px}
-.answer li{margin:4px 0}
-.answer h1, .answer h2, .answer h3, .answer h4{font-family:var(--font-display);margin:14px 0 6px;line-height:1.3}
-.answer h1{font-size:17px}
-.answer h2{font-size:16px}
+/* Answer typography: generous line height and clear spacing between blocks. */
+.answer{font-size:14.5px;line-height:1.7;overflow-wrap:anywhere}
+.answer > :first-child{margin-top:0}
+.answer > :last-child{margin-bottom:0}
+.bot .bubble .answer p{margin:0 0 12px}
+.answer ul, .answer ol{margin:4px 0 14px;padding-left:22px}
+.answer li{margin:5px 0;padding-left:2px}
+.answer li::marker{color:var(--brand);font-weight:600}
+.answer li > p{margin:0}
+.answer li ul, .answer li ol{margin:4px 0}
+.answer h1, .answer h2, .answer h3, .answer h4{font-family:var(--font-display);margin:18px 0 8px;line-height:1.3;
+  letter-spacing:-.01em;color:var(--ink)}
+.answer h1{font-size:18px}
+.answer h2{font-size:16.5px}
 .answer h3, .answer h4{font-size:15px}
-.answer blockquote{margin:8px 0;padding-left:12px;border-left:3px solid var(--brand);color:var(--ink-soft)}
+.answer a{color:var(--brand);text-decoration:underline;text-underline-offset:2px}
+.answer hr{border:none;border-top:1px solid var(--line);margin:16px 0}
+.answer blockquote{margin:10px 0;padding:6px 12px;border-left:3px solid var(--brand);color:var(--ink-soft);
+  background:var(--brand-tint);border-radius:0 8px 8px 0}
 .answer code{font-family:var(--font-mono);font-size:12.5px;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+.answer pre{background:var(--surface-2);border:1px solid var(--line-soft);border-radius:10px;padding:10px 12px;
+  overflow-x:auto;margin:8px 0 14px}
+.answer pre code{background:none;padding:0}
+.answer table{display:block;max-width:100%;overflow-x:auto;border-collapse:collapse;margin:8px 0 14px;font-size:13.5px}
+.answer th, .answer td{border:1px solid var(--line);padding:7px 10px;text-align:left;vertical-align:top}
+.answer th{background:var(--surface-2);font-weight:600}
 
 .ctx-line{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.03em;color:var(--ink-faint);
   margin-bottom:9px;display:flex;align-items:center;gap:6px}
@@ -288,6 +309,12 @@ button{font-family:inherit;cursor:pointer}
   .composer-wrap{padding:8px 14px 14px}
   .welcome h1{font-size:20px}
 }
+/* ---------- Toast action button ---------- */
+.toast.show{pointer-events:auto}
+.toast-action{margin-left:4px;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;
+  padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.toast-action:hover{background:var(--brand);border-color:var(--brand);color:#fff}
+
 /* ---------- Typing animation ---------- */
 .caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:-2px;border-radius:2px;
   background:var(--brand);animation:caret 1s steps(1) infinite}
