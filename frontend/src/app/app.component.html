@@ -34,6 +34,7 @@
       </div>
     </div>
     <div class="rail-foot">
+      <div class="idx"><b>{{ docCount }}</b> {{ docCount === 1 ? "document" : "documents" }} indexed<br />HR · IT · Facilities · Finance</div>
       <button class="icon-btn" (click)="logout()" title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
@@ -113,8 +114,7 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>
                   Answered for {{ user.role }} · Bengaluru
                 </div>
-                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
-                <div class="answer" *ngIf="!m.streaming" [innerHTML]="e.answer | safeHtml"></div>
+                <div class="answer" [innerHTML]="(m.streaming ? m.typed || '' : e.answer) | safeHtml"></div>
 
                 <div class="reveal" *ngIf="!m.streaming">
                 <div class="sources" *ngIf="e.sources?.length">
@@ -161,14 +161,14 @@
 
               <!-- Fallback / honest "I don't know" -->
               <ng-container *ngIf="m.fallback">
-                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
                 <div class="answer" *ngIf="!m.streaming">
                   <p *ngFor="let p of fallbackParas; trackBy: trackByIndex">{{ p }}</p>
                 </div>
                 <div class="reveal" *ngIf="!m.streaming">
                 <div class="meta">
                   <div class="acts" style="margin-left:0">
-                    <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman(m)" title="Opens your email app with the details filled in">
+                    <button class="ask-human" style="display:inline-flex;align-items:center;gap:6px" (click)="askHuman(m)" title="Opens an email to HR with your question filled in">
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" style="width:14px;height:14px"><circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>
                       Route this to the right team
                     </button>
@@ -187,8 +187,8 @@
 
               <!-- Plain note, e.g. upload acknowledgement -->
               <ng-container *ngIf="m.note">
-                <div class="answer" *ngIf="m.streaming" [innerHTML]="m.typed | cleanHtml"></div>
-                <div class="answer" *ngIf="!m.streaming" [innerHTML]="m.note | safeHtml"></div>
+                <div class="answer" *ngIf="m.streaming" [innerHTML]="(m.typed || '') | safeHtml"></div>
+                <div class="answer" *ngIf="!m.streaming"><p>{{ m.note }}</p></div>
                 <div class="reveal" *ngIf="!m.streaming">
                   <div class="meta">
                     <div class="acts">

@@ -1,9 +1,9 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
-import { SafeHtmlPipe, CleanHtmlPipe, renderMarkdown } from './safe-html.pipe';
+import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
 import { environment } from '../environments/environment';
@@ -65,10 +65,10 @@ const TYPE_MAX_MS = 4000;
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [CommonModule, FormsModule, SafeHtmlPipe, CleanHtmlPipe, LoginComponent],
+  imports: [CommonModule, FormsModule, SafeHtmlPipe, LoginComponent],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements AfterViewChecked, OnDestroy {
+export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   user: User | null = this.loadUser();
   history: string[] = this.loadHistory();
   messages: Msg[] = [];
@@ -86,6 +86,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   toastShow = false;
   /** Optional button shown in the toast, e.g. "Use Outlook app". */
   toastAction: { label: string; run: () => void } | null = null;
+  docCount = 0;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   private currentAudio: HTMLAudioElement | null = null;
@@ -105,6 +106,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private backendUrl = environment.apiUrl || 'http://127.0.0.1:8000';
   private apiUrl = this.backendUrl + '/query';
   private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
+  private statsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/documents/stats';
   private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
@@ -119,6 +121,33 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.dark = false;
     }
     this.applyTheme();
+  }
+
+
+  ngOnInit(): void {
+    if (this.user) {
+      this.fetchDocStats();
+    }
+  }
+
+  fetchDocStats(): void {
+    if (this.useMock) {
+      this.docCount = 12;
+      return;
+    }
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ""}`
+    });
+    this.http.get<{ count: number }>(this.statsUrl, { headers }).subscribe({
+      next: (res) => {
+        if (typeof res.count === "number") {
+          this.docCount = res.count;
+        }
+      },
+      error: () => {
+        this.docCount = 0;
+      }
+    });
   }
 
   ngAfterViewChecked(): void {
@@ -164,6 +193,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   onLogin(user: User): void {
     this.user = user;
+    this.fetchDocStats();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {}
@@ -556,9 +586,9 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   // --- Typing animation ----------------------------------------------------
 
   private replyHtml(m: Msg): string {
-    if (m.entry) return renderMarkdown(m.entry.answer);
+    if (m.entry) return m.entry.answer;
     if (m.fallback) return FALLBACK_PARAS.map((p) => `<p>${escapeHtml(p)}</p>`).join('');
-    if (m.note) return renderMarkdown(m.note);
+    if (m.note) return `<p>${escapeHtml(m.note)}</p>`;
     return '';
   }
 
@@ -743,7 +773,8 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   private plainText(m: Msg): string {
     if (m.fallback) return FALLBACK_PARAS.join(' ');
-    const raw = m.note || m.entry?.answer || '';
+    if (m.note) return m.note;
+    const raw = m.entry?.answer || '';
     // Strip markdown formatting characters (*, _, #, `, []) for cleaner read-aloud and export
     const cleanMarkdown = raw
       .replace(/[*_]{1,3}/g, '')
