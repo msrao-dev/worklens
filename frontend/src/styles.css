@@ -83,6 +83,11 @@ button{font-family:inherit;cursor:pointer}
   justify-content:space-between;gap:8px}
 .idx{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);line-height:1.4}
 .idx b{color:var(--brand);font-weight:500}
+.new-chat{display:flex;align-items:center;gap:9px;margin:2px 14px 6px;padding:10px 12px;border-radius:11px;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font-size:13.5px;font-weight:600;
+  box-shadow:var(--shadow);transition:.14s}
+.new-chat:hover{border-color:var(--brand);color:var(--brand)}
+.new-chat svg{width:15px;height:15px;color:var(--brand)}
 
 /* ---------- Main ---------- */
 .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
@@ -288,6 +293,12 @@ button{font-family:inherit;cursor:pointer}
   .composer-wrap{padding:8px 14px 14px}
   .welcome h1{font-size:20px}
 }
+/* ---------- Toast action button ---------- */
+.toast.show{pointer-events:auto}
+.toast-action{margin-left:4px;border:1px solid currentColor;background:transparent;color:inherit;border-radius:999px;
+  padding:3px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.toast-action:hover{background:var(--brand);border-color:var(--brand);color:#fff}
+
 /* ---------- Typing animation ---------- */
 .caret{display:inline-block;width:7px;height:1.05em;margin-left:2px;vertical-align:-2px;border-radius:2px;
   background:var(--brand);animation:caret 1s steps(1) infinite}
