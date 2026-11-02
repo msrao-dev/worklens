@@ -1,28 +1,37 @@
+from typing import TypedDict
+
 import fitz
 from docx import Document
 
-def extract_text(filepath):
 
-    if filepath.endswith(".pdf"):
-        text = ""
-        pdf = fitz.open(filepath)
+class IndexedChunk(TypedDict):
+    text: str
+    page_number: int | None
+    line_start: int
+    line_end: int
 
-        for page in pdf:
-            text += page.get_text()
 
-        return text
+def extract_text_units(filepath: str) -> list[tuple[int | None, str]]:
+    extension = filepath.rsplit(".", 1)[-1].lower()
 
-    elif filepath.endswith(".docx"):
+    if extension == "pdf":
+        with fitz.open(filepath) as pdf:
+            return [
+                (page_number, page.get_text("text"))
+                for page_number, page in enumerate(pdf, start=1)
+            ]
 
+    if extension == "docx":
         doc = Document(filepath)
+        return [(None, "\n".join(paragraph.text for paragraph in doc.paragraphs))]
 
-        return "\n".join(
-            [p.text for p in doc.paragraphs]
-        )
+    if extension == "txt":
+        with open(filepath, encoding="utf-8") as file:
+            return [(None, file.read())]
 
-    elif filepath.endswith(".txt"):
+    raise ValueError("Unsupported file type")
 
-        with open(filepath,"r",encoding="utf-8") as f:
-            return f.read()
 
-    raise Exception("Unsupported file type")
+def extract_text(filepath: str) -> str:
+    """Return extracted text for callers that do not need page boundaries."""
+    return "".join(text for _, text in extract_text_units(filepath))

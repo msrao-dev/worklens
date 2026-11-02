@@ -8,12 +8,15 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status, BackgroundTasks, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
+from pathlib import Path
 from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
 from backend.tts import synthesize_speech, cleanup_audio_cache
 from backend.guardrails import validate_input
+from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
 
@@ -31,7 +34,7 @@ from backend.auth import (
     get_current_user,
     require_hr_user,
 )
-from backend.ingest import extract_text
+from backend.ingest import IndexedChunk, extract_text_units
 from backend.rag import (
     GroqRequestError,
     LLMConfigurationError,
@@ -39,8 +42,45 @@ from backend.rag import (
     ask_question,
     reset_collection,
     store_chunks,
+    collection
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+
+def _split_text_units(text_units: list[tuple[int | None, str]]) -> list[IndexedChunk]:
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=1000,
+        chunk_overlap=200,
+        add_start_index=True,
+    )
+    chunks: list[IndexedChunk] = []
+
+    for page_number, text in text_units:
+        if not text.strip():
+            continue
+
+        for document in splitter.create_documents([text]):
+            chunk_text = document.page_content
+            start_index = document.metadata.get("start_index")
+            if (
+                not chunk_text
+                or not isinstance(start_index, int)
+                or start_index < 0
+                or start_index + len(chunk_text) > len(text)
+            ):
+                raise RuntimeError("Could not determine a document chunk's source position.")
+
+            line_start = text.count("\n", 0, start_index) + 1
+            line_end = line_start + chunk_text.rstrip("\r\n").count("\n")
+            chunks.append({
+                "text": chunk_text,
+                "page_number": page_number,
+                "line_start": line_start,
+                "line_end": line_end,
+            })
+
+    return chunks
+
 
 class TTSRequest(BaseModel):
     text: str
@@ -262,31 +302,63 @@ def reset_password(
 
 # --- Application Endpoints ---
 
+@app.get("/documents/stats")
+def get_document_stats(user = Depends(get_current_user)):
+    results = collection.get(include=["metadatas"])
+    metadatas = results.get("metadatas") or []
+
+    unique_sources = {m.get("source") for m in metadatas if m and m.get("source")}
+
+    return {
+        "count": len(unique_sources),
+        "documents": sorted(list(unique_sources))
+    }
+
+@app.get("/documents/{filename}")
+def get_document(filename: str, _current_user: dict = Depends(get_current_user)):
+    safe_name = Path(filename).name
+    filepath = Path(UPLOAD_DIR).resolve() / safe_name
+    if not filepath.is_file():
+        raise HTTPException(status_code=404, detail="Document not found.")
+    if filepath.suffix.lower() not in {".pdf", ".docx", ".txt"}:
+        raise HTTPException(status_code=404, detail="Document not found.")
+
+    return FileResponse(
+        path=str(filepath),
+        filename=safe_name,
+        media_type="application/pdf" if filepath.suffix.lower() == ".pdf" else "application/octet-stream",
+        content_disposition_type="inline" if filepath.suffix.lower() == ".pdf" else "attachment",
+    )
+
+
 @app.post("/ingest")
 async def ingest(
     file: UploadFile = File(...),
     _current_user: dict = Depends(require_hr_user),
 ):
-    filepath = os.path.join(UPLOAD_DIR, file.filename)
+    if not file.filename:
+        raise HTTPException(status_code=422, detail="A filename is required.")
+
+    safe_name = Path(file.filename).name
+    if not safe_name:
+        raise HTTPException(status_code=422, detail="A filename is required.")
+    filepath = os.path.join(UPLOAD_DIR, safe_name)
 
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
-    text = extract_text(filepath)
-
-    splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200
-    )
-
-    chunks = splitter.split_text(text)
-    store_chunks(chunks, filename=file.filename)
+    chunks = _split_text_units(extract_text_units(filepath))
+    if not chunks:
+        raise HTTPException(
+            status_code=422,
+            detail="No extractable text was found in the uploaded document.",
+        )
+    store_chunks(chunks, filename=safe_name)
 
     return {
         "status": "success",
         "chunks": len(chunks)
     }
-
 
 @app.post("/query")
 async def query(
@@ -392,7 +464,7 @@ async def reset(_current_user: dict = Depends(require_hr_user)):
     return {"status": "success"}
 
 @app.post("/audio/tts")
-def text_to_speech(
+async def text_to_speech(
     payload: TTSRequest,
     background_tasks: BackgroundTasks,
     _current_user: dict = Depends(get_current_user),
@@ -406,7 +478,8 @@ def text_to_speech(
     if voice not in ("amy", "ryan"):
         voice = "amy"
 
-    wav_bytes, _ = synthesize_speech(text, voice_name=voice)
+    # Offload the chunked CPU synthesis so Uvicorn can still respond to health checks
+    wav_bytes, _ = await run_in_threadpool(synthesize_speech, text, voice_name=voice)
 
     # Trigger post-response cleanup in the background
     background_tasks.add_task(cleanup_audio_cache)

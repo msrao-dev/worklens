@@ -1,7 +1,8 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, NgZone, inject } from '@angular/core';
+import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
 import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
@@ -60,7 +61,7 @@ const TYPE_MAX_MS = 4000;
   imports: [CommonModule, FormsModule, SafeHtmlPipe, LoginComponent],
   templateUrl: './app.component.html'
 })
-export class AppComponent implements AfterViewChecked, OnDestroy {
+export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   user: User | null = this.loadUser();
   history: string[] = this.loadHistory();
   messages: Msg[] = [];
@@ -72,8 +73,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   dark = false;
   railOpen = false;
   selectedSource: Source | null = null;
+  sourceDocumentUrl: string | null = null;
+  sourceDocumentLoading = false;
   toastMsg = '';
   toastShow = false;
+  docCount = 0;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   private currentAudio: HTMLAudioElement | null = null;
@@ -89,8 +93,11 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private typingTimer: any;
 
   private http = inject(HttpClient);
-  private apiUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/query';
+  private sanitizer = inject(DomSanitizer);
+  private backendUrl = environment.apiUrl || 'http://127.0.0.1:8000';
+  private apiUrl = this.backendUrl + '/query';
   private ttsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/audio/tts';
+  private statsUrl = (environment.apiUrl || 'http://127.0.0.1:8000') + '/documents/stats';
   private useMock = (environment as any).useMock ?? false;
 
   @ViewChild('stream') stream?: ElementRef<HTMLDivElement>;
@@ -104,6 +111,33 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.dark = false;
     }
     this.applyTheme();
+  }
+
+  
+  ngOnInit(): void {
+    if (this.user) {
+      this.fetchDocStats();
+    }
+  }
+
+  fetchDocStats(): void {
+    if (this.useMock) {
+      this.docCount = 12;
+      return;
+    }
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ""}`
+    });
+    this.http.get<{ count: number }>(this.statsUrl, { headers }).subscribe({
+      next: (res) => {
+        if (typeof res.count === "number") {
+          this.docCount = res.count;
+        }
+      },
+      error: () => {
+        this.docCount = 0;
+      }
+    });
   }
 
   ngAfterViewChecked(): void {
@@ -130,6 +164,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   ngOnDestroy(): void {
     this.stopSpeaking();
     this.finishTyping();
+    this.clearSourceDocumentUrl();
+  }
+
+  private clearSourceDocumentUrl(): void {
+    if (this.sourceDocumentUrl) {
+      URL.revokeObjectURL(this.sourceDocumentUrl.split('#')[0]);
+      this.sourceDocumentUrl = null;
+    }
   }
 
   // --- Session -------------------------------------------------------------
@@ -141,6 +183,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
 
   onLogin(user: User): void {
     this.user = user;
+    this.fetchDocStats();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {}
@@ -257,7 +300,14 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       this.http.post<{
         answer: string;
         sources: string[];
-        source_refs?: Array<{ source?: string; chunk_index?: number | null; text: string }>;
+        source_refs?: Array<{
+          source?: string;
+          chunk_index?: number | null;
+          page_number?: number | null;
+          line_start?: number | null;
+          line_end?: number | null;
+          text: string;
+        }>;
         suggested_questions?: string[];
         is_greeting?: boolean;
       }>(this.apiUrl, body, { headers }).subscribe({
@@ -285,24 +335,29 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
           const sources: Source[] = sourceRefs.length
             ? sourceRefs.map((source, idx) => ({
                 title: source.source || `Document Chunk ${idx + 1}`,
-                section: source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`,
+                section: this.sourceLocation(source.page_number, source.line_start, source.line_end)
+                  || (source.chunk_index == null ? 'Knowledge Base' : `Chunk ${source.chunk_index + 1}`),
                 updated: '2026',
                 fresh: true,
-                passage: source.text.replace(/\n/g, '<br/>')
+                pageNumber: source.page_number ?? undefined,
+                documentName: source.source || undefined,
+                lineStart: source.line_start ?? undefined,
+                lineEnd: source.line_end ?? undefined,
+                passage: `<mark>${escapeHtml(source.text).replace(/\n/g, '<br/>')}</mark>`
               }))
             : (res.sources || []).map((doc, idx) => ({
                 title: `Document Chunk ${idx + 1}`,
                 section: 'Knowledge Base',
                 updated: '2026',
                 fresh: true,
-                passage: doc.replace(/\n/g, '<br/>')
+                passage: `<mark>${escapeHtml(doc).replace(/\n/g, '<br/>')}</mark>`
               }));
           const entry: KBEntry = {
             id: String(Date.now()),
             cat: 'Policy',
             kw: [],
             conf: 'high',
-            answer: `<p>${res.answer.replace(/\n/g, '<br/>')}</p>`,
+            answer: res.answer,
             sources
           };
           this.push(typingMsg, {
@@ -404,7 +459,7 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
       responseType: 'blob'
     }).subscribe({
       next: (blob) => {
-        // Stop if the user cancelled or clicked another message while loading
+        // Cancelled or switched messages while waiting for network
         if (this.speaking !== m) return;
 
         this.currentAudioUrl = URL.createObjectURL(blob);
@@ -416,22 +471,78 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
         };
         audio.onerror = () => {
           this.zone.run(() => {
-            this.toast('Error playing audio');
-            this.stopSpeaking();
+            // Audio decode error -> fall back to browser speech
+            this.speakWithBrowser(textToRead, m);
           });
         };
 
         audio.play().catch(() => {
-          this.stopSpeaking();
-          this.toast('Browser blocked autoplay');
+          // Autoplay blocked -> fall back to browser speech
+          this.speakWithBrowser(textToRead, m);
         });
       },
-      error: (err) => {
-        this.stopSpeaking();
-        const detail = err.error?.detail || 'Could not generate speech.';
-        this.toast(detail);
+      error: () => {
+        // Backend failure (e.g. 503, timeout, network error) -> Fall back to browser speech
+        if (this.speaking !== m) return;
+        this.speakWithBrowser(textToRead, m);
       }
     });
+  }
+
+  /** Browser-native SpeechSynthesis fallback */
+  private speakWithBrowser(text: string, m: Msg): void {
+    console.log("speakWithBrowser");
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      this.toast('Speech synthesis is not supported on this device.');
+      this.stopSpeaking();
+      return;
+    }
+
+    // Stop any existing audio or speech
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio = null;
+    }
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-US';
+
+    // Pick an appropriate client-side voice matching the selection
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length) {
+      const isAmy = this.selectedVoice === 'amy';
+      const targetGenderKeywords = isAmy
+        ? ['female', 'samantha', 'zira', 'karen', 'victoria', 'amy']
+        : ['male', 'david', 'george', 'ryan', 'alex', 'guy'];
+
+      const matchedVoice = voices.find((v) => {
+        const name = v.name.toLowerCase();
+        return v.lang.startsWith('en') && targetGenderKeywords.some((kw) => name.includes(kw));
+      }) || voices.find((v) => v.lang.startsWith('en'));
+
+      if (matchedVoice) {
+        utterance.voice = matchedVoice;
+      }
+    }
+
+    utterance.onstart = () => {
+      console.log('SpeechSynthesis: started');
+    };
+
+    utterance.onend = (e) => {
+      console.log('SpeechSynthesis: ended', e);
+      this.zone.run(() => this.stopSpeaking());
+    };
+
+    utterance.onerror = (e) => {
+      console.error('SpeechSynthesis error:', e.error, e);
+      this.toast(`Browser speech failed: ${e.error}`);
+      this.zone.run(() => this.stopSpeaking());
+    };
+
+    this.speaking = m;
+    window.speechSynthesis.speak(utterance);
   }
 
   private stopSpeaking(): void {
@@ -442,6 +553,9 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
     if (this.currentAudioUrl) {
       URL.revokeObjectURL(this.currentAudioUrl);
       this.currentAudioUrl = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
     }
     this.speaking = null;
   }
@@ -619,18 +733,79 @@ export class AppComponent implements AfterViewChecked, OnDestroy {
   private plainText(m: Msg): string {
     if (m.fallback) return FALLBACK_PARAS.join(' ');
     if (m.note) return m.note;
-    return this.stripHtml(m.entry?.answer || '');
+    const raw = m.entry?.answer || '';
+    // Strip markdown formatting characters (*, _, #, `, []) for cleaner read-aloud and export
+    const cleanMarkdown = raw
+      .replace(/[*_]{1,3}/g, '')
+      .replace(/^#{1,6}\s+/gm, '')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
+    return this.stripHtml(cleanMarkdown);
   }
 
   private sourceLine(s: Source, i: number): string {
     return `${i + 1}. ${s.title} — ${s.section} (updated ${s.updated})`;
   }
 
+  private sourceLocation(
+    pageNumber?: number | null,
+    lineStart?: number | null,
+    lineEnd?: number | null
+  ): string {
+    const location: string[] = [];
+    if (pageNumber != null) location.push(`Page ${pageNumber}`);
+    if (lineStart != null) {
+      location.push(
+        lineEnd != null && lineEnd !== lineStart
+          ? `Lines ${lineStart}-${lineEnd}`
+          : `Line ${lineStart}`
+      );
+    }
+    return location.join(' · ');
+  }
+
   openDoc(s: Source): void {
     this.selectedSource = s;
+    this.clearSourceDocumentUrl();
+    this.sourceDocumentLoading = false;
+
+    if (!s.documentName) return;
+
+    const documentName = s.documentName.trim();
+    const extension = documentName.split('.').pop()?.toLowerCase();
+    if (!documentName || extension !== 'pdf') return;
+
+    this.sourceDocumentLoading = true;
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ''}`
+    });
+    const url = `${this.backendUrl}/documents/${encodeURIComponent(documentName)}`;
+    this.http.get(url, { headers, responseType: 'blob' }).subscribe({
+      next: (blob) => {
+        if (this.selectedSource !== s) return;
+        const objectUrl = URL.createObjectURL(blob);
+        this.sourceDocumentUrl = s.pageNumber
+          ? `${objectUrl}#page=${s.pageNumber}`
+          : objectUrl;
+        this.sourceDocumentLoading = false;
+      },
+      error: () => {
+        if (this.selectedSource !== s) return;
+        this.sourceDocumentLoading = false;
+        this.toastMsg = 'Unable to open the source document.';
+        this.toastShow = true;
+      }
+    });
   }
+
   closeDoc(): void {
     this.selectedSource = null;
+    this.sourceDocumentLoading = false;
+    this.clearSourceDocumentUrl();
+  }
+
+  safeSourceDocumentUrl(): SafeResourceUrl | null {
+    return this.sourceDocumentUrl ? this.sanitizer.bypassSecurityTrustResourceUrl(this.sourceDocumentUrl) : null;
   }
 
   /** Copies the answer plus its sources, ready to paste into Teams or email. */

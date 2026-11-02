@@ -29,7 +29,13 @@ class _Collection:
     def query(self, **_kwargs):
         return {
             "documents": [["Approved leave policy: 20 days per year."]],
-            "metadatas": [[{"source": "Employee Handbook.pdf", "chunk_index": 4}]],
+            "metadatas": [[{
+                "source": "Employee Handbook.pdf",
+                "chunk_index": 4,
+                "page_number": 2,
+                "line_start": 3,
+                "line_end": 4,
+            }]],
             "distances": [[0.12]],
         }
 
@@ -54,6 +60,8 @@ fake_chromadb = types.ModuleType("chromadb")
 fake_chromadb.PersistentClient = lambda **_kwargs: _ChromaClient()
 fake_ingest = types.ModuleType("backend.ingest")
 fake_ingest.extract_text = lambda _filepath: ""
+fake_ingest.extract_text_units = lambda _filepath: []
+fake_ingest.IndexedChunk = dict
 fake_text_splitters = types.ModuleType("langchain_text_splitters")
 fake_text_splitters.RecursiveCharacterTextSplitter = object
 with patch.dict(
@@ -297,12 +305,102 @@ class QueryEndpointTests(unittest.TestCase):
             [{
                 "source": "Employee Handbook.pdf",
                 "chunk_index": 4,
+                "page_number": 2,
+                "line_start": 3,
+                "line_end": 4,
                 "text": "Approved leave policy: 20 days per year.",
             }],
         )
         message_content = requests[0]["messages"][0]["content"]
         self.assertIsInstance(message_content, str)
         self.assertIn("Approved leave policy: 20 days per year.", message_content)
+
+    def test_indexed_chunks_keep_page_and_extracted_line_ranges(self):
+        class FakeSplitter:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+            def create_documents(self, texts):
+                text = texts[0]
+                chunks = [
+                    ("First policy line.", 0),
+                    ("Second policy line.", 19),
+                ]
+                return [
+                    types.SimpleNamespace(
+                        page_content=chunk,
+                        metadata={"start_index": start},
+                    )
+                    for chunk, start in chunks
+                    if text[start:start + len(chunk)] == chunk
+                ]
+
+        with patch.object(api, "RecursiveCharacterTextSplitter", FakeSplitter):
+            chunks = api._split_text_units([
+                (3, "First policy line.\nSecond policy line."),
+            ])
+
+        self.assertEqual(
+            chunks,
+            [
+                {
+                    "text": "First policy line.",
+                    "page_number": 3,
+                    "line_start": 1,
+                    "line_end": 1,
+                },
+                {
+                    "text": "Second policy line.",
+                    "page_number": 3,
+                    "line_start": 2,
+                    "line_end": 2,
+                },
+            ],
+        )
+
+    def test_store_chunks_persists_citation_locations_as_chroma_metadata(self):
+        stored = {}
+        collection = types.SimpleNamespace(add=lambda **kwargs: stored.update(kwargs))
+        chunks = [{
+            "text": "Policy excerpt.",
+            "page_number": 2,
+            "line_start": 5,
+            "line_end": 6,
+        }]
+
+        with patch.object(rag, "MODEL", types.SimpleNamespace(
+            encode=lambda documents: _Vector([[0.1, 0.2] for _ in documents])
+        )), patch.object(rag, "collection", collection):
+            rag.store_chunks(chunks, filename="Handbook.pdf")
+
+        self.assertEqual(stored["documents"], ["Policy excerpt."])
+        self.assertEqual(
+            stored["metadatas"],
+            [{
+                "source": "Handbook.pdf",
+                "chunk_index": 0,
+                "page_number": 2,
+                "line_start": 5,
+                "line_end": 6,
+            }],
+        )
+
+    def test_retrieved_sources_include_indexed_page_and_line_numbers(self):
+        with patch.object(rag, "generate_answer", return_value="Twenty days per year."), \
+                patch.object(rag, "generate_suggested_questions", return_value=[]):
+            result = rag.ask_question("How many leave days?")
+
+        self.assertEqual(
+            result["source_refs"][0],
+            {
+                "source": "Employee Handbook.pdf",
+                "chunk_index": 4,
+                "page_number": 2,
+                "line_start": 3,
+                "line_end": 4,
+                "text": "Approved leave policy: 20 days per year.",
+            },
+        )
 
     def test_query_with_history_passes_turns_and_contextualizes(self):
         history = [
