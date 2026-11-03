@@ -15,7 +15,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
 from backend.tts import synthesize_speech, cleanup_audio_cache
-from backend.guardrails import validate_input
+from backend.guardrails import InputValidationError, validate_history, validate_input
 from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
@@ -439,8 +439,13 @@ async def query(
             detail="Send a JSON body for text queries or multipart form data for image queries.",
         )
 
+    # Guardrails make blocking model/network calls; run them off the event
+    # loop so one slow check doesn't stall every other request.
     try:
-        question = validate_input(question)
+        question = await run_in_threadpool(validate_input, question)
+        history = await run_in_threadpool(validate_history, history)
+    except InputValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

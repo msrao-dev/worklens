@@ -11,7 +11,6 @@ from groq.types.chat import (
     ChatCompletionSystemMessageParam,
     ChatCompletionUserMessageParam,
 )
-from transformers import pipeline
 
 
 # --------------------------------------------------
@@ -23,6 +22,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 CONTENT_MODERATION_MODEL = "openai/gpt-oss-safeguard-20b"
 PROMPT_GUARD_MODEL = "Horizon-Labs/prompt-injection-guard-base"
+
+MAX_QUESTION_LENGTH = 2000
+MAX_HISTORY_TURNS = 4  # rag.py only sends the last 4 turns to the LLM
 
 _prompt_guard_classifier = None
 
@@ -48,6 +50,14 @@ or
 """
 
 
+class InputValidationError(ValueError):
+    """The question is missing or malformed (HTTP 422)."""
+
+
+class GuardrailViolation(ValueError):
+    """The question was blocked by a guardrail (HTTP 400)."""
+
+
 PROMPT_INJECTION_PATTERNS = [
     r"ignore\s+(all\s+)?previous\s+instructions",
     r"disregard\s+(all\s+)?(previous\s+)?instructions",
@@ -64,16 +74,15 @@ PROMPT_INJECTION_PATTERNS = [
 def validate_question(question: object) -> str:
     """Validate the type, emptiness, and length of a question."""
 
-    if not isinstance(question, str):
-        raise ValueError("Question must be a string.")
+    if not isinstance(question, str) or not question.strip():
+        raise InputValidationError("A non-empty question is required.")
 
     question = question.strip()
 
-    if not question:
-        raise ValueError("Question cannot be empty.")
-
-    if len(question) > 2000:
-        raise ValueError("Question cannot exceed 2000 characters.")
+    if len(question) > MAX_QUESTION_LENGTH:
+        raise InputValidationError(
+            f"Question cannot exceed {MAX_QUESTION_LENGTH} characters."
+        )
 
     return question
 
@@ -86,7 +95,8 @@ def sanitize_input(question: str) -> str:
     """Apply basic Unicode, HTML-tag, and whitespace normalization."""
 
     question = unicodedata.normalize("NFKC", question)
-    question = re.sub(r"<[^>]*>", " ", question)
+    # Only strip real tags, so "salary < 5000 and > 1000" stays intact.
+    question = re.sub(r"</?[A-Za-z][^>]*>", " ", question)
     question = re.sub(r"\s+", " ", question).strip()
 
     return question
@@ -115,6 +125,10 @@ def detect_prompt_injection_model(question: str) -> bool:
     global _prompt_guard_classifier
 
     if _prompt_guard_classifier is None:
+        # Imported lazily: transformers/torch are slow to load and not
+        # needed by code (or tests) that never reach this check.
+        from transformers import pipeline
+
         _prompt_guard_classifier = pipeline(
             "text-classification",
             model=PROMPT_GUARD_MODEL,
@@ -140,11 +154,16 @@ def detect_pii(question: str) -> bool:
     email_pattern = (
         r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"
     )
-    phone_pattern = r"(?<!\w)(?:\+?\d[\d\s()-]{7,}\d)(?!\w)"
+    phone_candidate = r"(?<!\w)\+?\d[\d\s()-]{7,}\d(?!\w)"
 
-    return bool(
-        re.search(email_pattern, question)
-        or re.search(phone_pattern, question)
+    if re.search(email_pattern, question):
+        return True
+
+    # Phone numbers have 10-15 digits; this skips years like "2023-2024"
+    # and dates like "01-01-2025".
+    return any(
+        10 <= len(re.sub(r"\D", "", match)) <= 15
+        for match in re.findall(phone_candidate, question)
     )
 
 
@@ -181,7 +200,12 @@ def detect_prohibited_content(question: str) -> bool:
             model=CONTENT_MODERATION_MODEL,
             messages=messages,
             temperature=0,
-            max_completion_tokens=100,
+            # gpt-oss is a reasoning model: reasoning tokens count toward
+            # this limit, so 100 left the JSON answer empty or truncated.
+            max_completion_tokens=1024,
+            reasoning_effort="low",
+            include_reasoning=False,
+            response_format={"type": "json_object"},
         )
 
         content = response.choices[0].message.content
@@ -208,7 +232,11 @@ def detect_prohibited_content(question: str) -> bool:
 # --------------------------------------------------
 
 def validate_input(question: object) -> str:
-    """Run input guardrails before processing a question."""
+    """Run input guardrails before processing a question.
+
+    Checks run cheapest first, so the paid Groq call only happens for input
+    that passed every local check.
+    """
 
     # 1. Validate
     question = validate_question(question)
@@ -218,20 +246,42 @@ def validate_input(question: object) -> str:
 
     # 3. Prompt injection: fast regex check
     if detect_prompt_injection(question):
-        raise ValueError("Potential prompt injection detected.")
+        raise GuardrailViolation("Potential prompt injection detected.")
 
     # 4. PII detection
     if detect_pii(question):
-        raise ValueError(
+        raise GuardrailViolation(
             "Input contains potentially sensitive personal information."
         )
 
-    # 5. Prohibited-content moderation
-    if detect_prohibited_content(question):
-        raise ValueError("Prohibited content detected.")
-
-    # 6. Prompt injection: model-based check
+    # 5. Prompt injection: local model check
     if detect_prompt_injection_model(question):
-        raise ValueError("Potential prompt injection detected.")
+        raise GuardrailViolation("Potential prompt injection detected.")
+
+    # 6. Prohibited-content moderation (network call)
+    if detect_prohibited_content(question):
+        raise GuardrailViolation("Prohibited content detected.")
 
     return question
+
+
+def validate_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Check the history turns that reach the LLM for prompt injection.
+
+    History comes from the client, so it can be forged; without this check
+    an injection placed in "history" skips every guardrail.
+    """
+
+    recent = history[-MAX_HISTORY_TURNS:]
+
+    for turn in recent:
+        text = sanitize_input(str(turn.get("text", "")))[:MAX_QUESTION_LENGTH]
+        if text and (
+            detect_prompt_injection(text)
+            or detect_prompt_injection_model(text)
+        ):
+            raise GuardrailViolation(
+                "Potential prompt injection detected in conversation history."
+            )
+
+    return recent
