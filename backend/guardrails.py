@@ -22,6 +22,9 @@ load_dotenv(PROJECT_ROOT / ".env")
 
 CONTENT_MODERATION_MODEL = "openai/gpt-oss-safeguard-20b"
 PROMPT_GUARD_MODEL = "Horizon-Labs/prompt-injection-guard-base"
+# Real attacks score 0.98+; formatting requests like "restrict your response
+# to 200 words" come back as INJECTION at ~0.5, so ignore low-confidence hits.
+PROMPT_GUARD_THRESHOLD = 0.90
 
 MAX_QUESTION_LENGTH = 2000
 MAX_HISTORY_TURNS = 4  # rag.py only sends the last 4 turns to the LLM
@@ -141,7 +144,10 @@ def detect_prompt_injection_model(question: str) -> bool:
         max_length=512,
     )[0]
 
-    return result["label"].upper() == "INJECTION"
+    return (
+        result["label"].upper() == "INJECTION"
+        and result["score"] >= PROMPT_GUARD_THRESHOLD
+    )
 
 
 # --------------------------------------------------
@@ -266,22 +272,26 @@ def validate_input(question: object) -> str:
 
 
 def validate_history(history: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Check the history turns that reach the LLM for prompt injection.
+    """Drop history turns that look like prompt injection.
 
     History comes from the client, so it can be forged; without this check
-    an injection placed in "history" skips every guardrail.
+    an injection placed in "history" skips every guardrail. Flagged turns are
+    dropped rather than rejected, because the frontend also sends earlier
+    questions that were already blocked, which would block every follow-up.
     """
 
     recent = history[-MAX_HISTORY_TURNS:]
 
-    for turn in recent:
-        text = sanitize_input(str(turn.get("text", "")))[:MAX_QUESTION_LENGTH]
-        if text and (
-            detect_prompt_injection(text)
-            or detect_prompt_injection_model(text)
-        ):
-            raise GuardrailViolation(
-                "Potential prompt injection detected in conversation history."
-            )
+    return [
+        turn
+        for turn in recent
+        if not _looks_like_injection(
+            sanitize_input(str(turn.get("text", "")))[:MAX_QUESTION_LENGTH]
+        )
+    ]
 
-    return recent
+
+def _looks_like_injection(text: str) -> bool:
+    return bool(text) and (
+        detect_prompt_injection(text) or detect_prompt_injection_model(text)
+    )
