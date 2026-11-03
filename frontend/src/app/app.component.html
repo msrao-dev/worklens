@@ -34,7 +34,20 @@
       </div>
     </div>
     <div class="rail-foot">
-      <div class="idx"><b>{{ docCount }}</b> {{ docCount === 1 ? "document" : "documents" }} indexed<br />HR · IT · Facilities · Finance</div>
+      <div class="idx">
+        <ng-container *ngIf="docLoading">
+          <span class="idx-loading"><i></i><i></i><i></i></span> Loading docs stats…
+        </ng-container>
+        <ng-container *ngIf="!docLoading && !docError">
+          <b>{{ docCount }}</b> {{ docCount === 1 ? "document" : "documents" }} indexed
+        </ng-container>
+        <ng-container *ngIf="!docLoading && docError">
+          <button type="button" class="idx-error" (click)="fetchDocStats()" title="Failed to fetch stats. Click to retry.">
+            ⚠ Failed to load (retry)
+          </button>
+        </ng-container>
+        <br />HR · IT · Facilities · Finance
+      </div>
       <button class="icon-btn" (click)="logout()" title="Sign out" aria-label="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
       </button>
