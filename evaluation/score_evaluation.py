@@ -24,8 +24,14 @@ METRIC_NAMES = [
     "answer_correctness",
 ]
 
+# Smoke runs on every PR, so it scores only the two strongest signals to save Groq tokens.
+SUITE_METRICS = {
+    "smoke": ["faithfulness", "answer_correctness"],
+    "sanity": METRIC_NAMES,
+}
 
-def build_metrics(client):
+
+def build_metrics(client, names):
     evaluator_llm = llm_factory(
         model=judge_model(),
         provider="openai",
@@ -40,7 +46,7 @@ def build_metrics(client):
         device="cpu",
         normalize_embeddings=True,
     )
-    return {
+    metrics = {
         "faithfulness": Faithfulness(llm=evaluator_llm),
         "answer_relevancy": AnswerRelevancy(
             llm=evaluator_llm,
@@ -53,6 +59,7 @@ def build_metrics(client):
             embeddings=evaluator_embeddings,
         ),
     }
+    return {name: metrics[name] for name in names}
 
 
 def metric_kwargs(name, record):
@@ -67,7 +74,7 @@ def metric_kwargs(name, record):
     return kwargs
 
 
-async def score_text(records, case_min):
+async def score_text(records, case_min, metric_names):
     """Add RAGAS scores to answered records and set each record's final status."""
     to_score = [record for record in records if record["status"] == "answered"]
     if not to_score:
@@ -80,7 +87,7 @@ async def score_text(records, case_min):
     )
 
     try:
-        metrics = build_metrics(client)
+        metrics = build_metrics(client, metric_names)
 
         for index, record in enumerate(to_score, start=1):
             print(f"\n[{index}/{len(to_score)}] Scoring {record['id']}")
@@ -121,9 +128,9 @@ async def score_text(records, case_min):
     return records
 
 
-def metric_averages(records):
+def metric_averages(records, metric_names):
     averages = {}
-    for name in METRIC_NAMES:
+    for name in metric_names:
         values = [r["scores"][name] for r in records if name in r.get("scores", {})]
         averages[name] = round(sum(values) / len(values), 3) if values else None
     return averages

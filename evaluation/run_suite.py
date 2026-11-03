@@ -18,7 +18,14 @@ import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 
-from evaluation.common import GOLDEN_FILE, REPORT_DIR, THRESHOLDS_FILE, load_json
+from evaluation.common import (
+    EVAL_GROQ_API_KEY,
+    GOLDEN_FILE,
+    REPORT_DIR,
+    THRESHOLDS_FILE,
+    judge_model,
+    load_json,
+)
 
 MAX_ANSWER_CHARS = 1500
 
@@ -37,8 +44,8 @@ def parse_args():
 
 def check_environment():
     problems = []
-    if not os.getenv("GROQ_API_KEY"):
-        problems.append("GROQ_API_KEY is not set")
+    if not EVAL_GROQ_API_KEY:
+        problems.append("EVAL_GROQ_API_KEY is not set (the main GROQ_API_KEY is never used for evaluation)")
     if os.getenv("LLM_PROVIDER", "ollama").lower() != "groq":
         problems.append("LLM_PROVIDER must be 'groq' (image questions need a Groq vision model)")
     if problems:
@@ -84,17 +91,17 @@ def git_commit():
         return "unknown"
 
 
-def build_report(suite, text_records, image_records, skipped, thresholds):
+def build_report(suite, text_records, image_records, skipped, thresholds, metric_names):
     from evaluation.score_evaluation import metric_averages
 
-    averages = metric_averages(text_records)
+    averages = metric_averages(text_records, metric_names)
     text_gates = {
         name: {
-            "average": averages.get(name),
-            "threshold": minimum,
-            "passed": averages.get(name) is not None and averages[name] >= minimum,
+            "average": averages[name],
+            "threshold": thresholds["text"]["mean"][name],
+            "passed": averages[name] is not None and averages[name] >= thresholds["text"]["mean"][name],
         }
-        for name, minimum in thresholds["text"]["mean"].items()
+        for name in metric_names
     } if text_records else {}
 
     cases = text_records + image_records
@@ -108,6 +115,7 @@ def build_report(suite, text_records, image_records, skipped, thresholds):
         "passed": bool(cases) and not failed_cases and not failed_gates,
         "failed_cases": failed_cases,
         "failed_gates": failed_gates,
+        "text_metrics": metric_names,
         "text_gates": text_gates,
         "text_cases": text_records,
         "image_cases": image_records,
@@ -130,8 +138,7 @@ def _status(record):
 
 
 def render_markdown(report):
-    from evaluation.score_evaluation import METRIC_NAMES
-
+    metric_names = report["text_metrics"]
     lines = [
         f"# WorkLens evaluation: {report['suite']} — {'✅ PASSED' if report['passed'] else '❌ FAILED'}",
         "",
@@ -149,14 +156,14 @@ def render_markdown(report):
         lines.append("")
 
     if report["text_cases"]:
-        header = " | ".join(METRIC_NAMES)
+        header = " | ".join(metric_names)
         lines += [
             "## Text cases", "",
             f"| ID | Type | Status | {header} | Reason |",
-            "|---" * (len(METRIC_NAMES) + 4) + "|",
+            "|---" * (len(metric_names) + 4) + "|",
         ]
         for record in report["text_cases"]:
-            scores = " | ".join(_score(record, name) for name in METRIC_NAMES)
+            scores = " | ".join(_score(record, name) for name in metric_names)
             lines.append(f"| {record['id']} | {record['type']} | {_status(record)} | {scores} | {_reason(record)} |")
         lines.append("")
 
@@ -225,16 +232,20 @@ def main():
     image_cases = [case for case in cases if case.get("image")]
     print(f"Suite '{args.suite}': {len(text_cases)} text, {len(image_cases)} image, {len(skipped)} skipped")
 
-    text_records, image_records = [], []
+    text_records, image_records, metric_names = [], [], []
+    print(f"Judge model: {judge_model()}")
 
     if text_cases:
         from evaluation.run_evaluation import generate_text_answers
-        from evaluation.score_evaluation import score_text
+        from evaluation.score_evaluation import SUITE_METRICS, score_text
 
+        metric_names = SUITE_METRICS[args.suite]
         print("\n=== Text cases: generating answers ===")
         text_records = generate_text_answers(text_cases)
-        print("\n=== Text cases: RAGAS scoring ===")
-        text_records = asyncio.run(score_text(text_records, thresholds["text"]["case_min"]))
+        print(f"\n=== Text cases: RAGAS scoring ({', '.join(metric_names)}) ===")
+        text_records = asyncio.run(
+            score_text(text_records, thresholds["text"]["case_min"], metric_names)
+        )
 
     if image_cases:
         from evaluation.run_image_evaluation import run_image_cases
@@ -242,7 +253,7 @@ def main():
         print("\n=== Image cases ===")
         image_records = run_image_cases(image_cases, thresholds["image"]["case_min"])
 
-    report = build_report(args.suite, text_records, image_records, skipped, thresholds)
+    report = build_report(args.suite, text_records, image_records, skipped, thresholds, metric_names)
     write_report(report)
 
     print(f"\nReport: {REPORT_DIR / 'report.md'}")

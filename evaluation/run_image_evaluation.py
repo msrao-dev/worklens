@@ -48,12 +48,13 @@ Rules:
 - Penalize unsupported claims and important omissions.
 - Treat equivalent wording as acceptable.
 - If the evidence does not support a claim, do not assume it is true.
+- Keep "reason" to one sentence of at most 30 words.
 - Return JSON only, with this exact structure:
 {{
   "correctness": 0.0,
   "completeness": 0.0,
   "grounding": 0.0,
-  "reason": "Brief explanation"
+  "reason": "One-sentence explanation"
 }}
 """
 
@@ -67,6 +68,7 @@ Rules:
             {"role": "user", "content": prompt},
         ],
         temperature=0,
+        max_tokens=900,
         response_format={"type": "json_object"},
     )
 

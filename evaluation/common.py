@@ -21,6 +21,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 load_dotenv(PROJECT_ROOT / ".env")
 
+# The eval must never spend the live app's Groq quota, so it runs on its own key.
+# backend.rag reads GROQ_API_KEY at import, which happens after this swap.
+EVAL_GROQ_API_KEY = os.getenv("EVAL_GROQ_API_KEY", "").strip()
+if EVAL_GROQ_API_KEY:
+    os.environ["GROQ_API_KEY"] = EVAL_GROQ_API_KEY
+else:
+    os.environ.pop("GROQ_API_KEY", None)
+
 # Seconds to wait before each retry when Groq returns 429.
 GROQ_RETRY_DELAYS = (15, 30, 60)
 
@@ -41,7 +49,8 @@ def ask_with_retry(question, images=None):
 
     for delay in (*GROQ_RETRY_DELAYS, None):
         try:
-            response = ask_question(question, images=images)
+            # Follow-up suggestions aren't scored, so skip that extra Groq call.
+            response = ask_question(question, images=images, suggest=False)
         except GroqRequestError as exc:
             if delay is None or "rate limit" not in str(exc).lower():
                 raise

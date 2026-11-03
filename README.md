@@ -39,7 +39,9 @@ uvicorn backend.app:app --host 0.0.0.0 --port 8000
 ## response-quality evaluation
 Runs the golden questions in `evaluation/golden_questions.json` (text + image) through the real
 RAG pipeline, scores them (RAGAS for text, an LLM judge for images) and fails when quality drops
-below `evaluation/thresholds.json`. Needs `LLM_PROVIDER=groq` and `GROQ_API_KEY` in `.env`.
+below `evaluation/thresholds.json`. Needs `LLM_PROVIDER=groq` and `EVAL_GROQ_API_KEY` in `.env`:
+a key from a separate Groq account, so evaluation never spends the live app's quota. The main
+`GROQ_API_KEY` is never used by the evaluation.
 
 ```
 python -m evaluation.run_suite --suite smoke     # few fast cases
@@ -49,7 +51,9 @@ python -m evaluation.run_suite --suite smoke --only image
 
 The report is written to `evaluation/reports/report.md` (and `report.json`).
 
-On GitHub Actions the "WorkLens Evaluation" workflow runs smoke on every PR, sanity on merge to
-main and nightly, and either suite on demand (Actions → WorkLens Evaluation → Run workflow).
+On GitHub Actions the "WorkLens Evaluation" workflow is manual only: Actions → WorkLens Evaluation
+→ Run workflow, then pick the branch and suite. It needs the `EVAL_GROQ_API_KEY` repo secret.
+Answers come from `GROQ_MODEL`; scoring uses `EVAL_JUDGE_MODEL` (repo variable / `.env`) when set,
+so grading does not use up the answer model's daily Groq quota.
 The report shows on the run's Summary page and as the `evaluation-<suite>-report` artifact.
 Cases whose `source_documents` are not in `backend/uploads` are skipped and listed in the report.
