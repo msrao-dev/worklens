@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 CHROMA_PATH = os.getenv("CHROMA_PATH", "./backend/chroma_db")
 EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
+RETRIEVAL_MAX_DISTANCE = float(os.getenv("RETRIEVAL_MAX_DISTANCE", "0.75"))
 
 # Provider and model routing
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama").lower()
@@ -262,28 +263,65 @@ Do not invent company policies. Keep the tone courteous, helpful, and profession
 
     results = collection.query(
         query_embeddings=[query_embedding],
-        n_results=5,
+        n_results=20,
         include=["documents", "metadatas", "distances"],
     )
 
     docs = results["documents"][0] if results["documents"] else []
     distance_results = results.get("distances")
     distances = distance_results[0] if distance_results else []
+    metadatas = results.get("metadatas") or [[]]
+    metadata = metadatas[0] if metadatas and metadatas[0] else []
+
+    ranked: list[tuple[str, dict, float | None]] = []
+    for index, doc in enumerate(docs):
+        distance = distances[index] if index < len(distances) else None
+        chunk_metadata = metadata[index] if index < len(metadata) and metadata[index] else {}
+        if distance is not None and distance > RETRIEVAL_MAX_DISTANCE:
+            logger.info("Filtered retrieval rank=%d distance=%s", index + 1, distance)
+            continue
+        ranked.append((doc, chunk_metadata, distance))
+
+    if not ranked:
+        return {
+            "answer": "Information not found.",
+            "sources": [],
+            "source_refs": [],
+            "suggested_questions": [],
+            "is_greeting": False,
+        }
+
+    valid_distances = [item[2] for item in ranked if item[2] is not None]
+    if not valid_distances:
+        return {
+            "answer": "Information not found.",
+            "sources": [],
+            "source_refs": [],
+            "suggested_questions": [],
+            "is_greeting": False,
+        }
+
+    best_source = ranked[0][1].get("source", "Knowledge Base")
+    relevant = [item for item in ranked if item[1].get("source", "Knowledge Base") == best_source][:5]
+    logger.info("Selected source document '%s' for query", best_source)
+
+    docs = [item[0] for item in relevant]
+    distances = [item[2] for item in relevant]
+    metadata = [item[1] for item in relevant]
     context = "\n\n".join(
-        f"Retrieved passage {index + 1}:\n{doc}"
+        f"Source document: {best_source}\nRetrieved passage {index + 1}:\n{doc}"
         for index, doc in enumerate(docs)
     )
     for index, doc in enumerate(docs):
         distance = distances[index] if index < len(distances) else None
         logger.info(
-            "Chroma result rank=%d distance=%s characters=%d",
+            "Chroma result rank=%d distance=%s source=%s characters=%d",
             index + 1,
             distance,
+            metadata[index].get("source", "Knowledge Base") if index < len(metadata) else "Knowledge Base",
             len(doc),
         )
 
-    metadatas = results.get("metadatas") or [[]]
-    metadata = metadatas[0] if metadatas and metadatas[0] else []
     source_refs = []
     for index, doc in enumerate(docs):
         chunk_metadata = metadata[index] if index < len(metadata) and metadata[index] else {}
@@ -376,3 +414,21 @@ def reset_collection():
     global collection
     client.delete_collection("employee_docs")
     collection = client.get_or_create_collection("employee_docs")
+
+
+def remove_chunks_by_source(filename: str) -> None:
+    collection.delete(where={"source": filename})
+
+
+def get_index_status() -> dict:
+    result = collection.get(include=["metadatas"])
+    metadatas = result.get("metadatas") or []
+    sources = sorted({
+        (metadata or {}).get("source", "Knowledge Base")
+        for metadata in metadatas
+        if metadata
+    })
+    return {
+        "indexed_chunks": collection.count(),
+        "sources": sources,
+    }
