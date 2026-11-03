@@ -15,6 +15,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 from starlette.formparsers import MultiPartException
 from pydantic import BaseModel
 from backend.tts import synthesize_speech, cleanup_audio_cache
+from backend.guardrails import InputValidationError, validate_history, validate_input
 from starlette.concurrency import run_in_threadpool
 
 load_dotenv()
@@ -469,8 +470,17 @@ async def query(
             detail="Send a JSON body for text queries or multipart form data for image queries.",
         )
 
-    if not isinstance(question, str) or not question.strip():
-        raise HTTPException(status_code=422, detail="A non-empty question is required.")
+    # Guardrails make blocking model/network calls; run them off the event
+    # loop so one slow check doesn't stall every other request.
+    try:
+        question = await run_in_threadpool(validate_input, question)
+        history = await run_in_threadpool(validate_history, history)
+    except InputValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
     try:
         response = ask_question(question.strip(), images if images else None, history=history)
