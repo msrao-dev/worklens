@@ -4,6 +4,7 @@ Usage, from the repo root:
     python -m evaluation.run_suite --suite smoke
     python -m evaluation.run_suite --suite sanity
     python -m evaluation.run_suite --suite smoke --only image
+    python -m evaluation.run_suite --suite smoke --golden evaluation/golden_questions.json
 
 Writes evaluation/reports/report.md and report.json, and appends the Markdown
 report to the GitHub job summary when running in Actions. Exits 1 when any case
@@ -14,6 +15,7 @@ import argparse
 import asyncio
 import json
 import os
+import re
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +41,12 @@ def parse_args():
         help="smoke = a few fast cases, sanity = every golden case",
     )
     parser.add_argument("--only", choices=("all", "text", "image"), default="all")
+    parser.add_argument(
+        "--golden",
+        type=Path,
+        default=Path(os.getenv("EVAL_GOLDEN_FILE") or GOLDEN_FILE),
+        help="golden questions file (default: evaluation/golden_data_v1.json)",
+    )
     return parser.parse_args()
 
 
@@ -53,25 +61,45 @@ def check_environment():
 
 
 def index_documents():
-    """Index backend/uploads exactly as the app does on startup."""
+    """Index the documents folder exactly as the app indexes its uploads on startup."""
     from backend.app import _reindex_missing_uploads
 
     status = _reindex_missing_uploads()["index_status"]
     print(f"Indexed {status['indexed_chunks']} chunks from: {', '.join(status['sources'])}")
     if not status["indexed_chunks"]:
-        raise SystemExit("No documents were indexed; check UPLOAD_DIR and backend/uploads.")
-    return {Path(source).stem for source in status["sources"]}
+        raise SystemExit(f"No documents were indexed; check {os.environ['UPLOAD_DIR']}.")
+    return [Path(source).stem for source in status["sources"]]
 
 
-def select_cases(suite, only, indexed_documents):
+def _document_words(name):
+    """'LAPTOP POLICY (1)' -> {'laptop', 'policy'}"""
+    name = re.sub(r"\(\d+\)", " ", name.lower())
+    return set(re.findall(r"[a-z0-9]+", name))
+
+
+def is_indexed(document, indexed_documents):
+    """Golden names and file names differ ('Laptop Issuance Policy' vs 'LAPTOP POLICY (1)'),
+    so match when one name's words contain the other's, sharing at least two words."""
+    wanted = _document_words(document)
+    for indexed in indexed_documents:
+        words = _document_words(indexed)
+        if len(wanted & words) >= 2 and (wanted <= words or words <= wanted):
+            return True
+    return False
+
+
+def select_cases(golden_file, suite, only, indexed_documents):
     selected, skipped = [], []
-    for case in load_json(GOLDEN_FILE):
+    for case in load_json(golden_file):
         if suite not in case.get("suites", []):
             continue
         kind = "image" if case.get("image") else "text"
         if only not in ("all", kind):
             continue
-        missing = [doc for doc in case.get("source_documents", []) if doc not in indexed_documents]
+        missing = [
+            doc for doc in case.get("source_documents", [])
+            if not is_indexed(doc, indexed_documents)
+        ]
         if missing:
             skipped.append({"id": case["id"], "reason": "Not indexed: " + ", ".join(missing)})
             continue
@@ -142,7 +170,7 @@ def render_markdown(report):
     lines = [
         f"# WorkLens evaluation: {report['suite']} — {'✅ PASSED' if report['passed'] else '❌ FAILED'}",
         "",
-        f"Commit `{report['commit']}` · {report['generated_at']} · "
+        f"Commit `{report['commit']}` · `{report['golden_file']}` · {report['generated_at']} · "
         f"{len(report['text_cases'])} text, {len(report['image_cases'])} image, "
         f"{len(report['skipped'])} skipped",
         "",
@@ -227,7 +255,8 @@ def main():
     thresholds = load_json(THRESHOLDS_FILE)
 
     indexed_documents = index_documents()
-    cases, skipped = select_cases(args.suite, args.only, indexed_documents)
+    print(f"Golden file: {args.golden}")
+    cases, skipped = select_cases(args.golden, args.suite, args.only, indexed_documents)
     text_cases = [case for case in cases if not case.get("image")]
     image_cases = [case for case in cases if case.get("image")]
     print(f"Suite '{args.suite}': {len(text_cases)} text, {len(image_cases)} image, {len(skipped)} skipped")
@@ -254,6 +283,7 @@ def main():
         image_records = run_image_cases(image_cases, thresholds["image"]["case_min"])
 
     report = build_report(args.suite, text_records, image_records, skipped, thresholds, metric_names)
+    report["golden_file"] = args.golden.name
     write_report(report)
 
     print(f"\nReport: {REPORT_DIR / 'report.md'}")

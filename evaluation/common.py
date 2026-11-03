@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EVALUATION_DIR = PROJECT_ROOT / "evaluation"
-GOLDEN_FILE = EVALUATION_DIR / "golden_questions.json"
+GOLDEN_FILE = EVALUATION_DIR / "golden_data_v1.json"
 THRESHOLDS_FILE = EVALUATION_DIR / "thresholds.json"
 REPORT_DIR = EVALUATION_DIR / "reports"
 
@@ -29,6 +29,11 @@ if EVAL_GROQ_API_KEY:
 else:
     os.environ.pop("GROQ_API_KEY", None)
 
+# Index every policy PDF in documents/ into a Chroma folder of its own, so the
+# local app's backend/chroma_db is never touched. backend reads both at import.
+os.environ["UPLOAD_DIR"] = os.getenv("EVAL_DOCUMENTS_DIR", "./documents")
+os.environ["CHROMA_PATH"] = os.getenv("EVAL_CHROMA_PATH", "./evaluation/chroma_db")
+
 # Seconds to wait before each retry when Groq returns 429.
 GROQ_RETRY_DELAYS = (15, 30, 60)
 
@@ -41,6 +46,23 @@ def load_json(path):
 def judge_model():
     """Model that scores answers; defaults to the model the app answers with."""
     return os.getenv("EVAL_JUDGE_MODEL") or os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b")
+
+
+# Judge calls occasionally return invalid JSON; retry each one this many times in total.
+JUDGE_ATTEMPTS = 3
+
+
+def judge_model_args():
+    """Generation settings for judge calls.
+
+    900 output tokens stays under Groq's on-demand cap for qwen; reasoning models
+    need more room, set via EVAL_JUDGE_MAX_TOKENS. gpt-oss reasons less, and so
+    finishes its JSON sooner, with reasoning_effort=low.
+    """
+    args = {"max_tokens": int(os.getenv("EVAL_JUDGE_MAX_TOKENS", "900"))}
+    if judge_model().startswith("openai/gpt-oss"):
+        args["reasoning_effort"] = "low"
+    return args
 
 
 def ask_with_retry(question, images=None):

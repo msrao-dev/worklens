@@ -32,9 +32,10 @@ jobs:
       GROQ_MODEL: qwen/qwen3.8-27b
       # Optional repo variable to score with a different Groq model than the app answers with.
       EVAL_JUDGE_MODEL: ${{ vars.EVAL_JUDGE_MODEL }}
+      # Room for a reasoning judge (gpt-oss) to finish its JSON; override with a repo variable.
+      EVAL_JUDGE_MAX_TOKENS: ${{ vars.EVAL_JUDGE_MAX_TOKENS || '2048' }}
       EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
-      UPLOAD_DIR: ./backend/uploads
-      CHROMA_PATH: ./backend/chroma_db
+      # Documents come from documents/ (all policy PDFs); the golden file defaults to golden_data_v1.json.
 
     steps:
       - name: Checkout repository

@@ -1,0 +1,491 @@
+[
+  {
+    "id": "EVAL001",
+    "question": "How many sick leaves and casual leaves are employees entitled to annually?",
+    "ground_truth": "All employees are entitled to 4 days of Sick Leave and 4 days of Casual Leave per calendar year, making a total of 8 days annually. The leave year runs from January to December. Sick Leave can be used when an employee is sick or unable to perform their duties. Casual Leave can be used for personal work and requires approval from the Project Manager at least one day in advance. Sick and Casual Leave cannot be carried forward to the next calendar year. Any unused balance will lapse at the end of December.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL002",
+    "question": "An employee takes sick leave for 4 consecutive days. Is a medical certificate required?",
+    "ground_truth": "Yes. A medical certificate is required when an employee takes Sick Leave for more than three consecutive days. Since the employee has taken four consecutive days of Sick Leave, they must submit a Medical Certificate from a Medical Officer. Employees covered under ESIC must provide a medical certificate issued by an Insurance Medical Officer (IMO) of an ESIC hospital. The Project Leader or Department Head should also be informed about the nature of the sickness as soon as possible. The company may require a further medical examination if the submitted certificate is not satisfactory.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL003",
+    "question": "An employee has no leave balance and takes Friday off. Will Saturday and Sunday also be considered LOP?",
+    "ground_truth": "Yes. According to the Leave Without Pay policy, the week-offs following a Loss of Pay day will also be considered Loss of Pay. Therefore, if an employee with no available leave balance takes Friday off as LOP, Saturday and Sunday will also be treated as LOP. This means the employee may have three days of LOP instead of just one. The policy also specifies that if an employee remains absent on a working Friday and the following working Monday without any leave balance, the intervening Saturday and Sunday will also be considered LOP.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Reasoning",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL004",
+    "question": "A team has 5 members. How many employees must participate for team outing reimbursement to be eligible?",
+    "ground_truth": "For team lunch, dinner or movie reimbursement, at least 6 employees from a team must participate. However, for smaller teams, the policy allows participation by at least 70% of the team members. Since this team has 5 members, 70% equals 3.5 employees. As participation must involve whole employees, at least 4 members must participate to meet the eligibility requirement. The reimbursement request must be submitted through GreytHR along with the original invoice, the list of participating employees and the Manager's approval.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Reasoning",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL005",
+    "question": "What are the eligibility criteria and duration of maternity leave?",
+    "ground_truth": "Female employees on confirmed employment who are not covered under the ESI Act, 1948, and have completed at least 80 days of continuous service with the company during the preceding 12 months are eligible for maternity leave. The benefit is restricted to employees with up to two surviving children. Eligible employees can avail up to 26 weeks (182 days) of maternity leave, consisting of up to 8 weeks before the expected delivery date and 18 weeks after delivery. The employee must inform HR at least two months in advance and submit a medical certificate confirming the pregnancy and expected delivery date.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL006",
+    "question": "What is the notice period during probation and after confirmation?",
+    "ground_truth": "The notice period depends on the employee's employment status. Employees who are still serving their probation period must provide 30 days' prior written notice when resigning. Employees who have been confirmed must provide 90 days' prior written notice. The company may, at its discretion, relieve an employee before completion of the notice period. It also reserves the right to pay or recover salary in lieu of the notice period. Any adjustment of accumulated leave against the notice period is subject to management's discretion.",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL007",
+    "question": "Can I install software on my company laptop if I need it for work?",
+    "ground_truth": "No. Employees are not permitted to independently install software or hardware on their company-issued laptops, even if they believe the installation is required for work. The Laptop Issuance Policy also prohibits employees from changing system configurations, including network settings. These restrictions help maintain the security, reliability and proper functioning of company equipment. If an employee requires additional software or hardware to perform their responsibilities, they should contact the technical support team for clarification and assistance rather than installing it independently.",
+    "source_documents": [
+      "Laptop Issuance Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL008",
+    "question": "Will I have to pay if my laptop develops a problem due to normal wear and tear?",
+    "ground_truth": "No. Employees are not personally responsible for regular work-related problems or normal wear and tear affecting their company-issued laptops. However, if the laptop or its accessories are damaged because of the employee's negligence or a deliberate act, the employee may be held personally responsible for the resulting costs. This may include both material and labour expenses. The policy makes employees responsible for protecting their laptops from loss, damage and theft, whether they are working on company premises or elsewhere.",
+    "source_documents": [
+      "Laptop Issuance Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL009",
+    "question": "Should I leave my laptop in sleep or hibernation mode when carrying it?",
+    "ground_truth": "No. Employees must power off their company-issued laptops when they are not in use. The Laptop Issuance Policy specifically states that laptops should not be carried while they are in suspend or hibernation mode. Employees should completely shut down their laptops before transporting them. This is part of the company's laptop handling and protection guidelines. Following this requirement helps employees handle company equipment appropriately and reduces the risk of problems associated with carrying a laptop in an inactive but powered state.",
+    "source_documents": [
+      "Laptop Issuance Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL010",
+    "question": "What is the exact procedure for reporting a stolen company laptop, and how quickly must I report it?",
+    "ground_truth": "The Laptop Issuance Policy makes employees responsible for protecting their company-issued laptops and accessories against loss, damage and theft. However, the policy does not specify an exact stolen-laptop reporting procedure or a mandatory reporting timeline. It also does not provide a dedicated incident-reporting contact or escalation process for theft. The document advises employees to contact the technical support team for clarification. Therefore, employees should seek guidance from the technical support team regarding the appropriate reporting and escalation process. The chatbot should not invent a reporting deadline or claim that a specific procedure is documented.",
+    "source_documents": [
+      "Laptop Issuance Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Unanswerable",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL011",
+    "question": "Am I expected to propose my own performance goals?",
+    "ground_truth": "Yes. Employees are expected to actively participate in the performance management process by proposing their own objectives in alignment with their department's objectives. However, the final objectives are defined by the direct manager, taking the employee's proposals into consideration. The manager is responsible for clarifying individual roles and responsibilities, setting expectations and reviewing objectives according to changing priorities. Employees are also expected to track their achievements, request periodic feedback and conduct a self-review at the end of the performance period.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL012",
+    "question": "How many KPIs should I have in my performance goals?",
+    "ground_truth": "Employees should have a minimum of 6 KPIs and a maximum of 8 KPIs in their individual performance goals. These KPIs should capture the employee's progress against the performance management factors, particularly critical role competencies. The KPI framework also requires employees to include at least one KPI related to Technical Competency and at least one related to Behavioral Competency. The KPIs should reflect the employee's responsibilities, performance expectations and development objectives. The purpose is to assess performance across different areas rather than focusing exclusively on project delivery.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL013",
+    "question": "What is the difference between Execution, Enabler and Enhancer KPIs?",
+    "ground_truth": "The Performance Management Process defines three categories of KPIs: Execution, Enabler and Enhancer. Execution KPIs measure performance related to project or product delivery for Senior and higher-level employees, and project-related work for Associate and Intermediate employees. Enabler KPIs focus on contributions and responsibilities related to Tricon as an organization. Enhancer KPIs measure an employee's self-development, including learning new tools and technologies, improving capabilities and applying newly acquired knowledge at work. Together, these three KPI categories provide a broader assessment of an employee's contribution, organizational involvement and professional development.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL014",
+    "question": "Does my performance rating affect my salary revision?",
+    "ground_truth": "Yes. Performance assessment is considered one of the inputs during the Annual Compensation Review. The annual compensation review cycle runs from April to March, and the actual compensation review takes place once a year in April. Performance reviews help assess an employee's achievements, progress against goals and overall contribution. However, the Performance Management Process document does not specify a fixed salary increment percentage or guarantee a particular salary revision based on an individual rating. Therefore, employees should not assume that receiving a particular rating automatically entitles them to a specific percentage increase.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL015",
+    "question": "If I joined after December, will I be included in the annual review?",
+    "ground_truth": "No. According to the Performance Management Process, employees who join after December 31 will appear in the next annual review cycle. The annual performance review period runs from October 1 to March 31. Employees who join before October are eligible for the relevant review cycle, while employees joining between October and March qualify for the subsequent annual cycle for compensation revision. The review eligibility rules depend on the employee's joining date and the applicable review period. Therefore, an employee joining in January, February or March will be considered in the next annual review cycle.",
+    "source_documents": [
+      "Performance Management Process"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL016",
+    "question": "Can I mention my client's name in my LinkedIn profile?",
+    "ground_truth": "No. Employees must not mention the names of customers they work with on their social media profiles, whether they identify the customer as their employer or client. The restriction also applies to conversations and posts on social media platforms. Disclosing customer names is considered a breach of confidentiality requirements. Employees are allowed to mention that they work for Tricon, but they must avoid disclosing customer identities or private and sensitive information about Tricon employees, clients, partners and other stakeholders.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL017",
+    "question": "Does the social media policy apply only to LinkedIn, Facebook and Twitter?",
+    "ground_truth": "No. The Social Media Policy is not restricted to LinkedIn, Facebook and Twitter. It also applies to other platforms that support user conversations and content sharing. Examples specifically mentioned in the policy include YouTube, Flickr, blogs and wikis. The policy covers social media participation broadly because employees are perceived as representatives of Tricon, and their online activities can reflect on the company, whether or not the content is directly related to work. Employees must follow the confidentiality and professional conduct requirements across all applicable social media platforms.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL018",
+    "question": "Can I post negative or offensive comments on social media?",
+    "ground_truth": "Employees must refrain from posting offensive language or content on social media. The Social Media Policy requires employees to exercise care when communicating online because their posts can be traced back to them and may reflect on Tricon. Employees should double-check their content before publishing it to ensure accuracy and compliance with confidentiality requirements. The policy also prohibits sharing private or sensitive information, unauthorized company communications, legal inferences and intellectual property belonging to other companies. Employees should remember that deleting an inappropriate post later may not undo its impact because it may already have been shared or saved.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL019",
+    "question": "What happens if I violate the social media policy?",
+    "ground_truth": "Employees who fail to follow the Social Media Policy may face serious consequences in accordance with the laws of the country where they are employed. The policy emphasizes that employees are perceived as representatives of Tricon, and their online activities can affect the company's reputation. Violations may involve disclosing customer names, sharing confidential information, posting offensive content or communicating on behalf of Tricon without authorization. However, the policy does not specify a fixed penalty structure, warning count or disciplinary escalation process for individual violations. The applicable consequences depend on the circumstances and relevant laws.",
+    "source_documents": [
+      "Social Media Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Unanswerable",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL020",
+    "question": "Can I use my office laptop for personal work?",
+    "ground_truth": "Yes, limited personal use of company IT resources is permitted under the Acceptable Use Policy, provided it does not interfere with company operations or employee productivity. However, company IT resources are primarily intended for business-related purposes. Employees must ensure that their personal activities do not compromise the security, performance or reliability of company systems. They must also follow all other applicable IT policies and restrictions. Therefore, personal use is allowed conditionally, but it should not interfere with professional responsibilities or involve prohibited activities.",
+    "source_documents": [
+      "Acceptable Use Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL021",
+    "question": "Can I use my office laptop to run my personal business?",
+    "ground_truth": "No. Employees must not use Tricon's IT resources for unauthorized commercial activities. Although the Acceptable Use Policy permits limited personal use of company IT resources, that permission does not extend to running a personal business or conducting unauthorized commercial operations using company equipment, network or other IT facilities. Company resources are primarily intended for business-related purposes and must be used responsibly. Employees must also avoid activities that could compromise company operations, productivity, information security or system performance.",
+    "source_documents": [
+      "Acceptable Use Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "EVAL022",
+    "question": "What activities should I avoid to keep the company network secure?",
+    "ground_truth": "Employees must avoid activities that could compromise the security, performance or reliability of Tricon's IT resources. They must not attempt to access data or accounts without authorization, introduce malicious software into the network, or download, install or use unauthorized software. Employees must also avoid accessing, uploading or distributing offensive, threatening or harmful content. Confidential information must be protected and must not be disclosed without proper authorization. Additionally, employees must respect software licensing and copyright agreements and avoid unsolicited emails, spam and harassment through company communication channels.",
+    "source_documents": [
+      "Acceptable Use Policy"
+    ],
+    "evidence_pages": [],
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG008",
+    "question": "I am submitting this restaurant bill for a team lunch attended by 4 people on 15 October 2026. How much can I claim for reimbursement? Check the company policy documents, calculate the per-person bill amount, verify the bill arithmetic, and explain the maximum eligible claim with the policy justification.",
+    "ground_truth": "The bill total shown is ₹4,400 for 4 people, giving a displayed per-person amount of ₹1,100. The stated policy limit is ₹900 per person, so the maximum eligible claim for 4 people is ₹3,600, subject to the team-lunch eligibility requirements. The bill arithmetic is inconsistent: ₹4,720 minus the ₹500 discount equals ₹4,220, and adding ₹211 tax gives ₹4,431 rather than ₹4,400. The claim requires review because of this discrepancy.",
+    "image": "evaluation/images/restaurant_bill_img8.png",
+    "task_type": "reimbursement_calculation",
+    "expected_answer": {
+      "bill_total": 4400,
+      "people_count": 4,
+      "per_person_amount": 1100,
+      "policy_limit_per_person": 900,
+      "policy_maximum": 3600,
+      "bill_arithmetic_consistent": false,
+      "claim_status": "requires_review"
+    },
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG009",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a graphic T-shirt, distressed jeans, and sneakers. Whether this outfit is permitted must be determined by checking the company's dress code policy. Evaluate each item against the specific policy requirements, including any restrictions on graphic designs or messages, distressed jeans, and sneakers. Explain which rules the outfit follows or violates, and do not conclude that it is prohibited unless the policy supports that conclusion.",
+    "image": "evaluation/images/casual_wear_men_img4.png",
+    "task_type": "dress_code_validation",
+    "expected_answer": {
+      "decision": "policy_dependent",
+      "reason": "Evaluate the graphic T-shirt, distressed jeans, and sneakers against the company's dress code policy."
+    },
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG010",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain whether the shirt, trousers, and formal shoes meet the requirements.",
+    "ground_truth": "The image shows a formal shirt, trousers, and formal shoes. Assess these items against the company's written dress code policy. Explain whether the shirt, trousers, and formal shoes meet the stated requirements, identifying any applicable restrictions or requirements. Do not assume that the outfit is compliant solely because it appears formal.",
+    "image": "evaluation/images/formal_shirt_trouser_img1.png",
+    "task_type": "dress_code_validation",
+    "expected_answer": {
+      "decision": "policy_dependent",
+      "reason": "Evaluate the formal shirt, trousers, and formal shoes against the company's dress code policy."
+    },
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG011",
+    "question": "I worked 7 hours on a Saturday with my manager's approval and ordered this lunch for myself. How much of this bill can I claim? Verify the bill arithmetic and explain the policy limit.",
+    "ground_truth": "The bill total is ₹682.50: subtotal ₹650.00 plus CGST ₹16.25 and SGST ₹16.25, so the arithmetic is consistent. Weekend working meal expenditure is paid at actuals subject to a maximum of ₹400 per day per person, for employees working six hours or more with Reporting Manager approval. The maximum eligible claim is ₹400. The claim must be raised in GreytHR with the bill uploaded, and original bills submitted to HR.",
+    "image": "evaluation/images/restaurant_bill_img7.png",
+    "task_type": "reimbursement_calculation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG012",
+    "question": "I stayed late in the office at my manager's request and took this cab home. Can I claim this ride, and how much will be reimbursed?",
+    "ground_truth": "The receipt shows a City Cabs ride from MG Road to Whitefield with a total of ₹472.50 (fare ₹450 plus 5% tax ₹22.50). Late working conveyance is reimbursed up to ₹400 per ride, with a maximum of 3 allowances per month, for male employees working after 11:00 PM and female employees working after 9:00 PM, and must be approved by the Reporting Manager in advance or within 1 working day. The receipt time is 09:15 AM, which does not match a late-night ride home, so the claim needs review; if eligible, at most ₹400 can be reimbursed.",
+    "image": "evaluation/images/valid_travel_bill_img9.png",
+    "task_type": "reimbursement_calculation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG013",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a collared polo shirt, chino trousers, and closed-toe white sneakers. The dress code recommends business formals or business casuals and lists collared shirts, trousers, and closed-toe shoes as permitted attire. Round-neck t-shirts, overly casual or revealing clothing, and attire with inappropriate graphics are prohibited; this outfit has none of those. The outfit is acceptable as business casual.",
+    "image": "evaluation/images/formal_poloshirt_men_img3.png",
+    "task_type": "dress_code_validation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG014",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a knee-length kurta with a dupatta, fitted trousers, and open-toe flat sandals. The dress code requires employees to be well groomed and in suitable professional office clothing, recommends business formals or business casuals, and lists closed-toe shoes among permitted attire. The policy does not explicitly mention ethnic wear; the kurta is not among the prohibited items (round-neck t-shirts, overly casual or revealing clothing, inappropriate graphics). The answer should say ethnic wear is not explicitly addressed, note the closed-toe shoe guidance for the sandals, and not invent a rule.",
+    "image": "evaluation/images/ethnic_wear_women_img2.png",
+    "task_type": "dress_code_validation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG015",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The bill image is too blurry to read the vendor, date, items, or amounts. No claim amount can be calculated or verified from it, and no figures should be guessed. The employee should provide a clear copy; the policy requires a copy of the original bill to be uploaded in GreytHR and the original bill submitted to HR.",
+    "image": "evaluation/images/invalid_blurry_bill_img10.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG016",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The bill is cropped: the restaurant name, bill number, date, and full item list are missing, although a total of ₹682.50 (subtotal ₹650.00 plus CGST and SGST of ₹16.25 each) is visible. Because the vendor and date cannot be verified, the claim cannot be confirmed as a valid team lunch expense. The employee should submit the complete original bill; the policy requires the original invoice and the list of employees with the manager's approval for team lunch claims.",
+    "image": "evaluation/images/invalid_partial_bill_img11.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG017",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The image is a handwritten note listing 2 meals for 500 and water for 50, totalling 550. It has no vendor name, date, bill number, or tax details, so it is not an original bill or invoice. The policy requires original bills/invoices for reimbursement, so this cannot be accepted as a valid claim; the employee should obtain the proper restaurant invoice.",
+    "image": "evaluation/images/invalid_handwritten_bill_img12.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "sanity"
+    ]
+  }
+]

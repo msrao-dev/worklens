@@ -1,5 +1,6 @@
 """Score live text answers with RAGAS and apply the per-case quality floors."""
 
+import asyncio
 import math
 import os
 
@@ -14,7 +15,7 @@ from ragas.metrics.collections import (
     AnswerCorrectness,
 )
 
-from evaluation.common import judge_model
+from evaluation.common import JUDGE_ATTEMPTS, judge_model, judge_model_args
 
 METRIC_NAMES = [
     "faithfulness",
@@ -38,8 +39,7 @@ def build_metrics(client, names):
         client=client,
         adapter="instructor",
         temperature=0,
-        # Groq's on-demand tier rejects any request asking for more than 1000 output tokens.
-        max_tokens=900,
+        **judge_model_args(),
     )
     evaluator_embeddings = HuggingFaceEmbeddings(
         model="BAAI/bge-small-en-v1.5",
@@ -60,6 +60,21 @@ def build_metrics(client, names):
         ),
     }
     return {name: metrics[name] for name in names}
+
+
+async def score_metric(metric, kwargs):
+    """Score one metric, retrying when the judge returns invalid JSON or NaN."""
+    for attempt in range(1, JUDGE_ATTEMPTS + 1):
+        try:
+            value = float((await metric.ascore(**kwargs)).value)
+            if math.isnan(value):
+                raise ValueError("metric returned NaN")
+            return value
+        except Exception as exc:
+            if attempt == JUDGE_ATTEMPTS:
+                raise
+            print(f"    attempt {attempt} failed ({type(exc).__name__}), retrying")
+            await asyncio.sleep(5 * attempt)
 
 
 def metric_kwargs(name, record):
@@ -96,10 +111,7 @@ async def score_text(records, case_min, metric_names):
 
             for name, metric in metrics.items():
                 try:
-                    result = await metric.ascore(**metric_kwargs(name, record))
-                    value = float(result.value)
-                    if math.isnan(value):
-                        raise ValueError("metric returned NaN")
+                    value = await score_metric(metric, metric_kwargs(name, record))
                     scores[name] = round(value, 3)
                     print(f"  {name}: {value:.3f}")
                 except Exception as exc:

@@ -4,3 +4,4 @@ __pycache__/
 .idea/
 evaluation/__pycache__/
 evaluation/reports/
+evaluation/chroma_db/

@@ -3,10 +3,17 @@
 import json
 import mimetypes
 import os
+import time
 
 from openai import OpenAI
 
-from evaluation.common import PROJECT_ROOT, ask_with_retry, judge_model
+from evaluation.common import (
+    JUDGE_ATTEMPTS,
+    PROJECT_ROOT,
+    ask_with_retry,
+    judge_model,
+    judge_model_args,
+)
 
 SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 JUDGE_CRITERIA = ("correctness", "completeness", "grounding")
@@ -58,26 +65,35 @@ Rules:
 }}
 """
 
-    response = client.chat.completions.create(
-        model=judge_model(),
-        messages=[
-            {
-                "role": "system",
-                "content": "You are a strict RAG evaluation judge. Return valid JSON only.",
-            },
-            {"role": "user", "content": prompt},
-        ],
-        temperature=0,
-        max_tokens=900,
-        response_format={"type": "json_object"},
-    )
+    # Groq sometimes rejects or truncates the judge's JSON; retry before giving up.
+    for attempt in range(1, JUDGE_ATTEMPTS + 1):
+        try:
+            response = client.chat.completions.create(
+                model=judge_model(),
+                messages=[
+                    {
+                        "role": "system",
+                        "content": "You are a strict RAG evaluation judge. Return valid JSON only.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0,
+                response_format={"type": "json_object"},
+                **judge_model_args(),
+            )
 
-    scores = json.loads(response.choices[0].message.content)
+            scores = json.loads(response.choices[0].message.content)
 
-    for key in JUDGE_CRITERIA:
-        value = scores.get(key)
-        if not isinstance(value, (int, float)) or not 0 <= value <= 1:
-            raise ValueError(f"Invalid evaluator score for {key}: {value}")
+            for key in JUDGE_CRITERIA:
+                value = scores.get(key)
+                if not isinstance(value, (int, float)) or not 0 <= value <= 1:
+                    raise ValueError(f"Invalid evaluator score for {key}: {value}")
+            break
+        except Exception as exc:
+            if attempt == JUDGE_ATTEMPTS:
+                raise
+            print(f"    judge attempt {attempt} failed ({type(exc).__name__}), retrying")
+            time.sleep(5 * attempt)
 
     scores["overall_score"] = round(sum(scores[key] for key in JUDGE_CRITERIA) / 3, 3)
     return scores
