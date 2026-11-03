@@ -7,7 +7,6 @@ import chromadb
 import uuid
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
-from backend.ingest import IndexedChunk
 
 load_dotenv()
 
@@ -198,8 +197,9 @@ Answer:
     return normalized
 
 
-def store_chunks(chunks: list[IndexedChunk], filename: str = "doc") -> None:
-    documents = [chunk["text"] for chunk in chunks]
+def store_chunks(chunks: list[str] | list[dict], filename: str = "doc") -> None:
+    """Store either legacy text chunks or page-aware indexed chunks."""
+    documents = [chunk["text"] if isinstance(chunk, dict) else chunk for chunk in chunks]
     embeddings = MODEL.encode(documents).tolist()
 
     ids = [
@@ -212,11 +212,14 @@ def store_chunks(chunks: list[IndexedChunk], filename: str = "doc") -> None:
         metadata: dict[str, str | int] = {
             "source": filename,
             "chunk_index": index,
-            "line_start": chunk["line_start"],
-            "line_end": chunk["line_end"],
         }
-        if chunk["page_number"] is not None:
-            metadata["page_number"] = chunk["page_number"]
+        if isinstance(chunk, dict):
+            if chunk.get("page_number") is not None:
+                metadata["page_number"] = chunk["page_number"]
+            if chunk.get("line_start") is not None:
+                metadata["line_start"] = chunk["line_start"]
+            if chunk.get("line_end") is not None:
+                metadata["line_end"] = chunk["line_end"]
         metadatas.append(metadata)
 
     collection.add(

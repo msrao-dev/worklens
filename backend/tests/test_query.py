@@ -315,48 +315,18 @@ class QueryEndpointTests(unittest.TestCase):
         self.assertIsInstance(message_content, str)
         self.assertIn("Approved leave policy: 20 days per year.", message_content)
 
-    def test_indexed_chunks_keep_page_and_extracted_line_ranges(self):
+    def test_manual_ingestion_uses_legacy_text_chunks(self):
         class FakeSplitter:
             def __init__(self, **kwargs):
                 self.kwargs = kwargs
 
-            def create_documents(self, texts):
-                text = texts[0]
-                chunks = [
-                    ("First policy line.", 0),
-                    ("Second policy line.", 19),
-                ]
-                return [
-                    types.SimpleNamespace(
-                        page_content=chunk,
-                        metadata={"start_index": start},
-                    )
-                    for chunk, start in chunks
-                    if text[start:start + len(chunk)] == chunk
-                ]
+            def split_text(self, text):
+                return text.split("\n")
 
         with patch.object(api, "RecursiveCharacterTextSplitter", FakeSplitter):
-            chunks = api._split_text_units([
-                (3, "First policy line.\nSecond policy line."),
-            ])
+            chunks = api._split_text("First policy line.\nSecond policy line.")
 
-        self.assertEqual(
-            chunks,
-            [
-                {
-                    "text": "First policy line.",
-                    "page_number": 3,
-                    "line_start": 1,
-                    "line_end": 1,
-                },
-                {
-                    "text": "Second policy line.",
-                    "page_number": 3,
-                    "line_start": 2,
-                    "line_end": 2,
-                },
-            ],
-        )
+        self.assertEqual(chunks, ["First policy line.", "Second policy line."])
 
     def test_store_chunks_persists_citation_locations_as_chroma_metadata(self):
         stored = {}

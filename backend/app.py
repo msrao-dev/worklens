@@ -32,7 +32,7 @@ from backend.auth import (
     get_current_user,
     require_hr_user,
 )
-from backend.ingest import IndexedChunk, extract_text_units
+from backend.ingest import extract_text
 from backend.rag import (
     GroqRequestError,
     LLMConfigurationError,
@@ -46,61 +46,12 @@ from backend.rag import (
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 
-def _split_text_units(text_units: list[tuple[int | None, str]]) -> list[IndexedChunk]:
+def _split_text(text: str) -> list[str]:
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=1000,
         chunk_overlap=200,
-        add_start_index=True,
     )
-    chunks: list[IndexedChunk] = []
-
-    for page_number, text in text_units:
-        if not text.strip():
-            continue
-
-        for document in splitter.create_documents([text]):
-            chunk_text = document.page_content
-            start_index = document.metadata.get("start_index")
-            if (
-                not chunk_text
-                or not isinstance(start_index, int)
-                or start_index < 0
-                or start_index + len(chunk_text) > len(text)
-            ):
-                raise RuntimeError("Could not determine a document chunk's source position.")
-
-            line_start = text.count("\n", 0, start_index) + 1
-            line_end = line_start + chunk_text.rstrip("\r\n").count("\n")
-            chunks.append({
-                "text": chunk_text,
-                "page_number": page_number,
-                "line_start": line_start,
-                "line_end": line_end,
-            })
-
-    return chunks
-
-
-def _reindex_missing_uploads() -> dict:
-    upload_dir = Path(UPLOAD_DIR).resolve()
-    indexed_sources = set(get_index_status()["sources"])
-    discovered: list[str] = []
-
-    for filepath in sorted(upload_dir.iterdir() if upload_dir.exists() else []):
-        if not filepath.is_file() or filepath.suffix.lower() not in {".pdf", ".docx", ".txt"}:
-            continue
-        discovered.append(filepath.name)
-        if filepath.name in indexed_sources:
-            continue
-
-        chunks = _split_text_units(extract_text_units(str(filepath)))
-        if chunks:
-            store_chunks(chunks, filename=filepath.name)
-
-    return {
-        "discovered_documents": discovered,
-        "index_status": get_index_status(),
-    }
+    return [chunk.strip() for chunk in splitter.split_text(text) if chunk.strip()]
 
 
 class TTSRequest(BaseModel):
@@ -110,9 +61,6 @@ class TTSRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db_and_seed_hr()
-    result = _reindex_missing_uploads()
-    import logging
-    logging.getLogger(__name__).info("Document index startup reconciliation: %s", result)
     yield
 
 
@@ -362,7 +310,7 @@ async def ingest(
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
-    chunks = _split_text_units(extract_text_units(filepath))
+    chunks = _split_text(extract_text(filepath))
     if not chunks:
         raise HTTPException(
             status_code=422,
