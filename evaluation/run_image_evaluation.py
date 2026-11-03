@@ -1,36 +1,22 @@
+"""Run the image golden cases through the RAG pipeline and score them with an LLM judge."""
 
 import json
-import os
 import mimetypes
-from pathlib import Path
+import os
 
-from dotenv import load_dotenv
 from openai import OpenAI
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from evaluation.common import PROJECT_ROOT, ask_with_retry, judge_model
 
-import sys
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from backend.rag import ask_question
-EVALUATION_DIR = PROJECT_ROOT / "evaluation"
-GOLDEN_FILE = EVALUATION_DIR / "golden_questions.json"
-OUTPUT_FILE = EVALUATION_DIR / "image_evaluation_results.json"
-
-PASS_THRESHOLD = 0.80
-
-load_dotenv(PROJECT_ROOT / ".env")
+SUPPORTED_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
+JUDGE_CRITERIA = ("correctness", "completeness", "grounding")
 
 
 def load_evaluator():
-    api_key = os.getenv("GROQ_API_KEY")
-    if not api_key:
-        raise RuntimeError("GROQ_API_KEY is missing from .env")
-
     return OpenAI(
-        api_key=api_key,
+        api_key=os.environ["GROQ_API_KEY"],
         base_url="https://api.groq.com/openai/v1",
+        max_retries=5,
     )
 
 
@@ -72,7 +58,7 @@ Rules:
 """
 
     response = client.chat.completions.create(
-        model=os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b"),
+        model=judge_model(),
         messages=[
             {
                 "role": "system",
@@ -84,158 +70,91 @@ Rules:
         response_format={"type": "json_object"},
     )
 
-    content = response.choices[0].message.content
-    scores = json.loads(content)
+    scores = json.loads(response.choices[0].message.content)
 
-    for key in ("correctness", "completeness", "grounding"):
+    for key in JUDGE_CRITERIA:
         value = scores.get(key)
         if not isinstance(value, (int, float)) or not 0 <= value <= 1:
             raise ValueError(f"Invalid evaluator score for {key}: {value}")
 
-    scores["overall_score"] = round(
-        (
-            scores["correctness"]
-            + scores["completeness"]
-            + scores["grounding"]
-        ) / 3,
-        3,
-    )
-    scores["passed"] = (
-        scores["correctness"] >= PASS_THRESHOLD
-        and scores["completeness"] >= PASS_THRESHOLD
-        and scores["grounding"] >= PASS_THRESHOLD
-    )
-
+    scores["overall_score"] = round(sum(scores[key] for key in JUDGE_CRITERIA) / 3, 3)
     return scores
 
 
-def main():
-    with GOLDEN_FILE.open("r", encoding="utf-8") as file:
-        golden_questions = json.load(file)
-
-    image_cases = [item for item in golden_questions if item.get("image")]
-
-    if not image_cases:
-        raise RuntimeError("No image questions found in golden_questions.json")
-
-    # Validate references before making model calls.
-    missing_references = [
-        item.get("id", "unknown")
-        for item in image_cases
-        if not (
-            isinstance(item.get("ground_truth"), str)
-            and item["ground_truth"].strip()
-        )
-    ]
-
-    if missing_references:
-        raise RuntimeError(
-            "Add a non-empty ground_truth reference for these image cases: "
-            + ", ".join(missing_references)
-        )
-
+def run_image_cases(cases, case_min):
     client = load_evaluator()
     results = []
 
     try:
-        for index, item in enumerate(image_cases, start=1):
-            case_id = item["id"]
-            question = item["question"]
-            image_path = PROJECT_ROOT / item["image"]
-
+        for index, case in enumerate(cases, start=1):
+            image_path = PROJECT_ROOT / case["image"]
             record = {
-                "id": case_id,
-                "question": question,
-                "image": item["image"],
-                "ground_truth": item["ground_truth"],
+                "id": case["id"],
+                "type": case.get("type", ""),
+                "task_type": case.get("task_type", ""),
+                "question": case["question"],
+                "image": case["image"],
+                "ground_truth": case["ground_truth"],
                 "answer": "",
                 "retrieved_contexts": [],
                 "status": "error",
             }
 
-            print(f"\n[{index}/{len(image_cases)}] {case_id}: {question}")
+            print(f"\n[{index}/{len(cases)}] {case['id']}: {case['question']}")
 
             try:
-                if not question.strip():
-                    raise ValueError("Question is empty")
-
                 if not image_path.is_file():
                     raise FileNotFoundError(f"Image not found: {image_path}")
 
                 mime_type, _ = mimetypes.guess_type(image_path.name)
-                if mime_type not in {
-                    "image/png",
-                    "image/jpeg",
-                    "image/webp",
-                }:
+                if mime_type not in SUPPORTED_MIME_TYPES:
                     raise ValueError(f"Unsupported image type: {mime_type}")
 
-                response = ask_question(
-                    question.strip(),
+                response = ask_with_retry(
+                    case["question"].strip(),
                     images=[(image_path.read_bytes(), mime_type)],
                 )
-
-                if not isinstance(response, dict):
-                    raise TypeError("ask_question() did not return a dictionary")
-
-                answer = response.get("answer", "")
-                contexts = response.get("sources", [])
-
+                answer = (response.get("answer") or "").strip()
+                contexts = response.get("sources") or []
                 record["answer"] = answer
                 record["retrieved_contexts"] = contexts
 
-                if not isinstance(answer, str) or not answer.strip():
+                if not answer:
                     record["status"] = "fail"
                     record["failure_reason"] = "Empty answer"
-
                 elif not contexts:
                     record["status"] = "fail"
                     record["failure_reason"] = "No retrieved evidence"
-
                 else:
                     scores = evaluate_answer(
                         client=client,
-                        question=question,
-                        reference=item["ground_truth"],
+                        question=case["question"],
+                        reference=case["ground_truth"],
                         answer=answer,
                         contexts=contexts,
                     )
                     record["scores"] = scores
-                    record["status"] = "passed" if scores["passed"] else "fail"
-
-                print(f"Status: {record['status']}")
-                if "scores" in record:
-                    print(json.dumps(record["scores"], indent=2))
-                elif "failure_reason" in record:
-                    print(record["failure_reason"])
+                    below = [
+                        f"{name} {scores[name]:.2f} < {floor}"
+                        for name, floor in case_min.items()
+                        if scores[name] < floor
+                    ]
+                    if below:
+                        record["status"] = "fail"
+                        record["failure_reason"] = ", ".join(below)
+                    else:
+                        record["status"] = "passed"
 
             except Exception as exc:
                 record["status"] = "error"
                 record["error"] = f"{type(exc).__name__}: {exc}"
-                print(f"ERROR: {record['error']}")
 
+            print(f"  {record['status']}: {record.get('failure_reason') or record.get('error') or 'ok'}")
+            if "scores" in record:
+                print(f"  judge: {record['scores'].get('reason', '')}")
             results.append(record)
-
-            # Save progress after every case, even if a later case fails.
-            OUTPUT_FILE.write_text(
-                json.dumps(results, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
 
     finally:
         client.close()
 
-    passed = sum(item["status"] == "passed" for item in results)
-    failed = sum(item["status"] == "fail" for item in results)
-    errors = sum(item["status"] == "error" for item in results)
-
-    print(f"\nImage evaluation summary: {passed} passed, {failed} failed, {errors} errors")
-    print(f"Results saved to: {OUTPUT_FILE}")
-
-    # Make CI fail when quality checks fail or cannot be completed.
-    if failed or errors:
-        raise SystemExit(1)
-
-
-if __name__ == "__main__":
-    main()
+    return results

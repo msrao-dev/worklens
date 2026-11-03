@@ -1,118 +1,52 @@
-import json
-import sys
-from pathlib import Path
+"""Generate live answers for the text golden cases by calling the RAG pipeline."""
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+from evaluation.common import ask_with_retry
 
-from backend.rag import ask_question
-
-GOLDEN_DATA_PATH = PROJECT_ROOT / "evaluation" / "golden_questions.json"
-OUTPUT_PATH = PROJECT_ROOT / "evaluation" / "image_evaluation_results.json"
-
-MIME_TYPES = {
-    ".png": "image/png",
-    ".jpg": "image/jpeg",
-    ".jpeg": "image/jpeg",
-    ".webp": "image/webp",
-}
+NOT_FOUND_ANSWER = "Information not found."
 
 
-def main():
-    with GOLDEN_DATA_PATH.open("r", encoding="utf-8") as file:
-        golden_questions = json.load(file)
-
-    image_cases = [
-        item for item in golden_questions
-        if item.get("image")
-    ]
-
+def generate_text_answers(cases):
     results = []
 
-    if not image_cases:
-        print("No image questions found.")
-        return
+    for index, case in enumerate(cases, start=1):
+        print(f"\n[{index}/{len(cases)}] {case['id']}: {case['question']}")
 
-    for index, item in enumerate(image_cases, start=1):
-        item_id = item["id"]
-        question = item["question"]
-        image_path = PROJECT_ROOT / item["image"]
-
-        print(f"\n{'=' * 70}")
-        print(f"[{index}/{len(image_cases)}] {item_id}")
-        print(f"Question: {question}")
-        print(f"Image: {item['image']}")
+        record = {
+            "id": case["id"],
+            "type": case.get("type", ""),
+            "question": case["question"],
+            "ground_truth": case.get("ground_truth", ""),
+            "answer": "",
+            "retrieved_contexts": [],
+            "status": "error",
+        }
 
         try:
-            if not image_path.is_file():
-                raise FileNotFoundError(f"Image not found: {image_path}")
+            response = ask_with_retry(case["question"])
+            answer = (response.get("answer") or "").strip()
+            contexts = response.get("sources") or []
+            record["answer"] = answer
+            record["retrieved_contexts"] = contexts
 
-            mime_type = MIME_TYPES.get(image_path.suffix.lower())
-            if not mime_type:
-                raise ValueError(
-                    f"Unsupported image type: {image_path.suffix}"
-                )
+            # Unanswerable cases are expected to decline, so "not found" is fine there.
+            expects_answer = "unanswerable" not in record["type"].lower()
 
-            image_bytes = image_path.read_bytes()
-
-            result = ask_question(
-                question,
-                images=[(image_bytes, mime_type)],
-            )
-
-            answer = result.get("answer", "")
-            contexts = result.get("retrieved_contexts", [])
-
-            # Print the generated answer even if contexts are unavailable.
-            print("\nGENERATED RESPONSE:")
-            print(answer or "(No answer returned)")
-
-            print(f"\nRetrieved contexts found: {len(contexts)}")
-
-            if not contexts:
-                print(
-                    "WARNING: No retrieved contexts were found in the "
-                    "ask_question() result. Check the return structure "
-                    "used by the existing text evaluation runner."
-                )
-
-            status = "success" if answer and contexts else (
-                "missing_contexts" if answer else "empty_response"
-            )
-
-            results.append({
-                "id": item_id,
-                "question": question,
-                "answer": answer,
-                "retrieved_contexts": contexts,
-                "ground_truth": item.get("expected_answer"),
-                "status": status,
-            })
-
-            print(f"\nStatus: {status}")
+            if not answer:
+                record["status"] = "fail"
+                record["failure_reason"] = "Empty answer"
+            elif not contexts:
+                record["status"] = "fail"
+                record["failure_reason"] = "No retrieved evidence"
+            elif answer == NOT_FOUND_ANSWER and expects_answer:
+                record["status"] = "fail"
+                record["failure_reason"] = "App answered 'Information not found.'"
+            else:
+                record["status"] = "answered"
 
         except Exception as exc:
-            error_message = f"{type(exc).__name__}: {exc}"
-            print(f"\nERROR: {error_message}")
+            record["error"] = f"{type(exc).__name__}: {exc}"
 
-            results.append({
-                "id": item_id,
-                "question": question,
-                "answer": "",
-                "retrieved_contexts": [],
-                "ground_truth": item.get("expected_answer"),
-                "status": "error",
-                "error": error_message,
-            })
+        print(f"  {record['status']}: {record.get('failure_reason') or record.get('error') or 'ok'}")
+        results.append(record)
 
-        # Save progress after every image question.
-        OUTPUT_PATH.write_text(
-            json.dumps(results, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-
-    print(f"\nImage results saved to: {OUTPUT_PATH}")
-
-
-if __name__ == "__main__":
-    main()
+    return results

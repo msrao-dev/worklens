@@ -9,7 +9,11 @@
     "evidence_pages": [
       "23"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "EVAL002",
@@ -21,7 +25,11 @@
     "evidence_pages": [
       "24-25"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "EVAL003",
@@ -33,7 +41,10 @@
     "evidence_pages": [
       "5"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL004",
@@ -45,7 +56,10 @@
     "evidence_pages": [
       "8"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL005",
@@ -57,7 +71,10 @@
     "evidence_pages": [
       "1"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL006",
@@ -71,7 +88,10 @@
       "Laptop Policy, page 1",
       "Acceptable Use Policy, pages 1-2"
     ],
-    "type": "Cross-document"
+    "type": "Cross-document",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL007",
@@ -83,7 +103,10 @@
     "evidence_pages": [
       "1"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL008",
@@ -97,7 +120,10 @@
       "Laptop Policy, page 1",
       "Acceptable Use Policy, pages 1-2"
     ],
-    "type": "Cross-document"
+    "type": "Cross-document",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL009",
@@ -109,7 +135,11 @@
     "evidence_pages": [
       "13-14"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "EVAL010",
@@ -121,7 +151,11 @@
     "evidence_pages": [
       "24"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "EVAL011",
@@ -133,7 +167,10 @@
     "evidence_pages": [
       "1"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL012",
@@ -145,7 +182,10 @@
     "evidence_pages": [
       "11"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL013",
@@ -158,7 +198,11 @@
     "evidence_pages": [
       "Not specified"
     ],
-    "type": "Unanswerable / Cross-document"
+    "type": "Unanswerable / Cross-document",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "EVAL014",
@@ -172,7 +216,10 @@
       "Employee Handbook, page 25",
       "Certification & Variable Pay Policy, page 1"
     ],
-    "type": "Conflict Detection / Cross-document"
+    "type": "Conflict Detection / Cross-document",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL015",
@@ -186,7 +233,10 @@
       "Performance Management Process, pages 8 and 11",
       "Certification & Variable Pay Policy, page 2"
     ],
-    "type": "Cross-document / Unanswerable"
+    "type": "Cross-document / Unanswerable",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL016",
@@ -200,7 +250,10 @@
       "Maternity Leave Application Form, page 1",
       "Reimbursement Claim Checklist, page 1"
     ],
-    "type": "Cross-document"
+    "type": "Cross-document",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL017",
@@ -212,7 +265,10 @@
     "evidence_pages": [
       "1"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL018",
@@ -224,7 +280,10 @@
     "evidence_pages": [
       "1"
     ],
-    "type": "Direct"
+    "type": "Direct",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL019",
@@ -236,7 +295,10 @@
     "evidence_pages": [
       "2"
     ],
-    "type": "Unanswerable"
+    "type": "Unanswerable",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "EVAL020",
@@ -250,7 +312,10 @@
       "Certification & Variable Pay Policy, page 1",
       "Social Media Policy, page 1"
     ],
-    "type": "Cross-document"
+    "type": "Cross-document",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "IMG008",
@@ -271,9 +336,14 @@
       "Employee Handbook September 2026"
     ],
     "evidence_pages": [
-      "Verify the relevant policy page"
+      "23",
+      "24"
     ],
-    "type": "Image / Reimbursement Calculation"
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
   },
   {
     "id": "IMG009",
@@ -286,12 +356,15 @@
       "reason": "Evaluate the graphic T-shirt, distressed jeans, and sneakers against the company's dress code policy."
     },
     "source_documents": [
-      "Company Dress Code Policy (verify exact document name)"
+      "Employee Handbook September 2026"
     ],
     "evidence_pages": [
-      "Verify the relevant dress-code policy page"
+      "11"
     ],
-    "type": "Image / Policy Validation"
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
   },
   {
     "id": "IMG010",
@@ -304,11 +377,140 @@
       "reason": "Evaluate the formal shirt, trousers, and formal shoes against the company's dress code policy."
     },
     "source_documents": [
-      "Company Dress Code Policy (verify exact document name)"
+      "Employee Handbook September 2026"
     ],
     "evidence_pages": [
-      "Verify the relevant dress-code policy page"
+      "11"
     ],
-    "type": "Image / Policy Validation"
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG011",
+    "question": "I worked 7 hours on a Saturday with my manager's approval and ordered this lunch for myself. How much of this bill can I claim? Verify the bill arithmetic and explain the policy limit.",
+    "ground_truth": "The bill total is ₹682.50: subtotal ₹650.00 plus CGST ₹16.25 and SGST ₹16.25, so the arithmetic is consistent. Weekend working meal expenditure is paid at actuals subject to a maximum of ₹400 per day per person, for employees working six hours or more with Reporting Manager approval. The maximum eligible claim is ₹400. The claim must be raised in GreytHR with the bill uploaded, and original bills submitted to HR.",
+    "image": "evaluation/images/restaurant_bill_img7.png",
+    "task_type": "reimbursement_calculation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG012",
+    "question": "I stayed late in the office at my manager's request and took this cab home. Can I claim this ride, and how much will be reimbursed?",
+    "ground_truth": "The receipt shows a City Cabs ride from MG Road to Whitefield with a total of ₹472.50 (fare ₹450 plus 5% tax ₹22.50). Late working conveyance is reimbursed up to ₹400 per ride, with a maximum of 3 allowances per month, for male employees working after 11:00 PM and female employees working after 9:00 PM, and must be approved by the Reporting Manager in advance or within 1 working day. The receipt time is 09:15 AM, which does not match a late-night ride home, so the claim needs review; if eligible, at most ₹400 can be reimbursed.",
+    "image": "evaluation/images/valid_travel_bill_img9.png",
+    "task_type": "reimbursement_calculation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Reimbursement Calculation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG013",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a collared polo shirt, chino trousers, and closed-toe white sneakers. The dress code recommends business formals or business casuals and lists collared shirts, trousers, and closed-toe shoes as permitted attire. Round-neck t-shirts, overly casual or revealing clothing, and attire with inappropriate graphics are prohibited; this outfit has none of those. The outfit is acceptable as business casual.",
+    "image": "evaluation/images/formal_poloshirt_men_img3.png",
+    "task_type": "dress_code_validation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG014",
+    "question": "Can I wear this outfit to the office? Is it allowed under the company dress code? Please check the dress code policy and explain which rules this outfit follows or violates.",
+    "ground_truth": "The image shows a knee-length kurta with a dupatta, fitted trousers, and open-toe flat sandals. The dress code requires employees to be well groomed and in suitable professional office clothing, recommends business formals or business casuals, and lists closed-toe shoes among permitted attire. The policy does not explicitly mention ethnic wear; the kurta is not among the prohibited items (round-neck t-shirts, overly casual or revealing clothing, inappropriate graphics). The answer should say ethnic wear is not explicitly addressed, note the closed-toe shoe guidance for the sandals, and not invent a rule.",
+    "image": "evaluation/images/ethnic_wear_women_img2.png",
+    "task_type": "dress_code_validation",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "11"
+    ],
+    "type": "Image / Policy Validation",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG015",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The bill image is too blurry to read the vendor, date, items, or amounts. No claim amount can be calculated or verified from it, and no figures should be guessed. The employee should provide a clear copy; the policy requires a copy of the original bill to be uploaded in GreytHR and the original bill submitted to HR.",
+    "image": "evaluation/images/invalid_blurry_bill_img10.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "smoke",
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG016",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The bill is cropped: the restaurant name, bill number, date, and full item list are missing, although a total of ₹682.50 (subtotal ₹650.00 plus CGST and SGST of ₹16.25 each) is visible. Because the vendor and date cannot be verified, the claim cannot be confirmed as a valid team lunch expense. The employee should submit the complete original bill; the policy requires the original invoice and the list of employees with the manager's approval for team lunch claims.",
+    "image": "evaluation/images/invalid_partial_bill_img11.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "sanity"
+    ]
+  },
+  {
+    "id": "IMG017",
+    "question": "Please calculate how much I can claim for this restaurant bill from our team lunch.",
+    "ground_truth": "The image is a handwritten note listing 2 meals for 500 and water for 50, totalling 550. It has no vendor name, date, bill number, or tax details, so it is not an original bill or invoice. The policy requires original bills/invoices for reimbursement, so this cannot be accepted as a valid claim; the employee should obtain the proper restaurant invoice.",
+    "image": "evaluation/images/invalid_handwritten_bill_img12.png",
+    "task_type": "invalid_bill_detection",
+    "source_documents": [
+      "Employee Handbook September 2026"
+    ],
+    "evidence_pages": [
+      "23",
+      "24"
+    ],
+    "type": "Image / Negative",
+    "suites": [
+      "sanity"
+    ]
   }
 ]

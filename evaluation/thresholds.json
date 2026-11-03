@@ -1,0 +1,22 @@
+{
+  "text": {
+    "mean": {
+      "faithfulness": 0.7,
+      "answer_relevancy": 0.7,
+      "context_precision": 0.6,
+      "context_recall": 0.6,
+      "answer_correctness": 0.5
+    },
+    "case_min": {
+      "faithfulness": 0.5,
+      "answer_correctness": 0.3
+    }
+  },
+  "image": {
+    "case_min": {
+      "correctness": 0.8,
+      "completeness": 0.8,
+      "grounding": 0.8
+    }
+  }
+}

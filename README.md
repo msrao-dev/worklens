@@ -35,3 +35,21 @@ GROQ_MODEL=qwen/qwen3.8-27b
 
 ## serving application
 uvicorn backend.app:app --host 0.0.0.0 --port 8000
+
+## response-quality evaluation
+Runs the golden questions in `evaluation/golden_questions.json` (text + image) through the real
+RAG pipeline, scores them (RAGAS for text, an LLM judge for images) and fails when quality drops
+below `evaluation/thresholds.json`. Needs `LLM_PROVIDER=groq` and `GROQ_API_KEY` in `.env`.
+
+```
+python -m evaluation.run_suite --suite smoke     # few fast cases
+python -m evaluation.run_suite --suite sanity    # every case
+python -m evaluation.run_suite --suite smoke --only image
+```
+
+The report is written to `evaluation/reports/report.md` (and `report.json`).
+
+On GitHub Actions the "WorkLens Evaluation" workflow runs smoke on every PR, sanity on merge to
+main and nightly, and either suite on demand (Actions → WorkLens Evaluation → Run workflow).
+The report shows on the run's Summary page and as the `evaluation-<suite>-report` artifact.
+Cases whose `source_documents` are not in `backend/uploads` are skipped and listed in the report.
