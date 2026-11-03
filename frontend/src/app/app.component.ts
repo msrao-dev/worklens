@@ -87,6 +87,8 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   /** Optional button shown in the toast, e.g. "Use Outlook app". */
   toastAction: { label: string; run: () => void } | null = null;
   docCount = 0;
+  docLoading = true;
+  docError = false;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   private currentAudio: HTMLAudioElement | null = null;
@@ -133,18 +135,25 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   fetchDocStats(): void {
     if (this.useMock) {
       this.docCount = 12;
+      this.docLoading = false;
+      this.docError = false;
       return;
     }
+    this.docLoading = true;
+    this.docError = false;
     const headers = new HttpHeaders({
       Authorization: `Bearer ${this.user?.token || ""}`
     });
     this.http.get<{ count: number }>(this.statsUrl, { headers }).subscribe({
       next: (res) => {
+        this.docLoading = false;
         if (typeof res.count === "number") {
           this.docCount = res.count;
         }
       },
       error: () => {
+        this.docLoading = false;
+        this.docError = true;
         this.docCount = 0;
       }
     });

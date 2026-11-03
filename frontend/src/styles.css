@@ -358,3 +358,10 @@ button{font-family:inherit;cursor:pointer}
   width: 13px;
   height: 13px;
 }
+/* Document stats loading & error indicator */
+.idx-loading{display:inline-flex;gap:3px;vertical-align:middle;margin-right:4px}
+.idx-loading i{width:4px;height:4px;border-radius:50%;background:var(--brand);display:inline-block;animation:blink 1.2s infinite both}
+.idx-loading i:nth-child(2){animation-delay:.2s}
+.idx-loading i:nth-child(3){animation-delay:.4s}
+.idx-error{background:none;border:none;padding:0;font:inherit;color:var(--warn);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
+.idx-error:hover{color:var(--ink)}
