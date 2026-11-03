@@ -4,6 +4,9 @@ name: WorkLens Evaluation
 # smoke  = a few fast cases
 # sanity = every golden case
 on:
+  # TEMPORARY: lets the eval run on this branch before it is on main. Remove before merging.
+  push:
+    branches: [feat/ragas-evaluation]
   workflow_dispatch:
     inputs:
       suite:
@@ -22,7 +25,7 @@ jobs:
     timeout-minutes: 60
 
     env:
-      SUITE: ${{ inputs.suite }}
+      SUITE: ${{ inputs.suite || 'smoke' }}
       # Separate Groq account, so evaluation never spends the live app's quota.
       EVAL_GROQ_API_KEY: ${{ secrets.EVAL_GROQ_API_KEY }}
       LLM_PROVIDER: groq
@@ -56,14 +59,14 @@ jobs:
           # RAGAS 0.4.3 needs this langchain-community build; installed without deps on purpose.
           python -m pip install --no-deps "langchain-community==0.4.1"
 
-      - name: Run ${{ inputs.suite }} suite
+      - name: Run ${{ env.SUITE }} suite
         run: python -m evaluation.run_suite --suite "$SUITE"
 
       - name: Upload evaluation report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evaluation-${{ inputs.suite }}-report
+          name: evaluation-${{ env.SUITE }}-report
           path: evaluation/reports/
           retention-days: 14
           if-no-files-found: warn
