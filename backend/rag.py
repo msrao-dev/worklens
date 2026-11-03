@@ -232,6 +232,7 @@ def ask_question(
     images: list[ImageInput] | None = None,
     history: list[dict[str, str]] | None = None,
     suggest: bool = True,
+    max_words: int | None = None,
 ):
     """Answer a question; pass suggest=False to skip the follow-up-question LLM call."""
     history = history or []
@@ -345,6 +346,12 @@ Do not invent company policies. Keep the tone courteous, helpful, and profession
             history_lines.append(f"{role}: {turn.get('text', '')}")
         history_context = f"\nRecent Conversation History:\n" + "\n".join(history_lines) + "\n"
 
+    # Evaluation passes max_words to cap answer length (and tokens); the app never does.
+    if max_words:
+        length_rule = f"\nKeep the answer to about {max_words} words, covering only the key rules and numbers."
+    else:
+        length_rule = ""
+
     if images:
         prompt = f"""
 You are WorkLens, an enterprise knowledge assistant answering queries based on company policy documents.
@@ -368,7 +375,7 @@ Instructions:
 1. Answer the question using the retrieved context, previous conversation turns, and any provided images.
 2. Company policy claims must be grounded in the retrieved context. If specific details (e.g. daily-rate formulas) are not fully stated in the text, present all relevant rules, bases (e.g., basic salary), and limits mentioned in the context, and note what remains unspecified.
 3. Distinguish visual observations from official policy statements.
-4. Only return "Information not found." if the retrieved context is completely irrelevant to the question.
+4. Only return "Information not found." if the retrieved context is completely irrelevant to the question.{length_rule}
 """
     else:
         prompt = f"""
@@ -393,7 +400,7 @@ Instructions:
 2. Synthesize all pertinent rules, eligibility conditions, calculation bases (e.g., basic salary vs. allowances), and caps given in the text.
 3. If an exact mathematical formula is not explicitly detailed in the text, explain the calculation rules that ARE provided (e.g., carryover thresholds, maximum encashable days, pay components) and state clearly if any granular divisor or formula detail is not mentioned.
 4. Do not invent unmentioned terms or policies.
-5. Only return "Information not found." if the retrieved context contains no relevant information to address the question.
+5. Only return "Information not found." if the retrieved context contains no relevant information to address the question.{length_rule}
 """
 
     answer_text = generate_answer(prompt, images) if images else generate_answer(prompt)

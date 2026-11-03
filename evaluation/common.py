@@ -34,6 +34,9 @@ else:
 os.environ["UPLOAD_DIR"] = os.getenv("EVAL_DOCUMENTS_DIR", "./documents")
 os.environ["CHROMA_PATH"] = os.getenv("EVAL_CHROMA_PATH", "./evaluation/chroma_db")
 
+# Ask the app for shorter answers to save tokens; 0 turns the limit off.
+ANSWER_MAX_WORDS = int(os.getenv("EVAL_ANSWER_MAX_WORDS", "100"))
+
 # Seconds to wait before each retry when Groq returns 429.
 GROQ_RETRY_DELAYS = (15, 30, 60)
 
@@ -72,7 +75,9 @@ def ask_with_retry(question, images=None):
     for delay in (*GROQ_RETRY_DELAYS, None):
         try:
             # Follow-up suggestions aren't scored, so skip that extra Groq call.
-            response = ask_question(question, images=images, suggest=False)
+            response = ask_question(
+                question, images=images, suggest=False, max_words=ANSWER_MAX_WORDS
+            )
         except GroqRequestError as exc:
             if delay is None or "rate limit" not in str(exc).lower():
                 raise

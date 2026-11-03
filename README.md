@@ -54,7 +54,8 @@ It indexes every PDF in `documents/` into its own Chroma folder (`evaluation/chr
 local app database is untouched. Golden `source_documents` names are matched loosely to file names
 (e.g. "Laptop Issuance Policy" → `LAPTOP POLICY (1).pdf`). Optional `.env` settings:
 `EVAL_DOCUMENTS_DIR`, `EVAL_CHROMA_PATH`, `EVAL_GOLDEN_FILE`, `EVAL_JUDGE_MAX_TOKENS` (use ~2048
-with a gpt-oss judge).
+with a gpt-oss judge), `EVAL_ANSWER_MAX_WORDS` (default 100: the eval asks the app for answers of
+about this many words to save tokens; `0` turns it off. The live app is never limited).
 
 The report is written to `evaluation/reports/report.md` (and `report.json`).
 

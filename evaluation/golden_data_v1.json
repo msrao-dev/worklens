@@ -295,15 +295,18 @@
   {
     "id": "IMG008",
     "question": "I am submitting this restaurant bill for a team lunch attended by 4 people on 15 October 2026. How much can I claim for reimbursement? Check the company policy documents, calculate the per-person bill amount, verify the bill arithmetic, and explain the maximum eligible claim with the policy justification.",
-    "ground_truth": "The bill total shown is ₹4,400 for 4 people, giving a displayed per-person amount of ₹1,100. The stated policy limit is ₹900 per person, so the maximum eligible claim for 4 people is ₹3,600, subject to the team-lunch eligibility requirements. The bill arithmetic is inconsistent: ₹4,720 minus the ₹500 discount equals ₹4,220, and adding ₹211 tax gives ₹4,431 rather than ₹4,400. The claim requires review because of this discrepancy.",
+    "ground_truth": "The bill total shown is ₹4,400 for 4 people, a per-person amount of ₹1,100. Team lunch reimbursement requires at least 6 employees from one team, or 70% of a smaller team, to attend. With 4 attendees the claim is eligible only if they are at least 70% of a smaller team (for example, a team of 5 or fewer); otherwise the eligible claim is ₹0. If eligible, the limit is ₹900 per quarter per employee for Trainee and above (₹100 for Office Assistants), so the maximum claim is 4 × ₹900 = ₹3,600, provided that quarter's budget is unused. The bill arithmetic is inconsistent: ₹4,720 minus the ₹500 discount equals ₹4,220, and adding ₹211 tax gives ₹4,431 rather than ₹4,400, so the claim requires review.",
     "image": "evaluation/images/restaurant_bill_img8.png",
     "task_type": "reimbursement_calculation",
     "expected_answer": {
       "bill_total": 4400,
       "people_count": 4,
       "per_person_amount": 1100,
-      "policy_limit_per_person": 900,
-      "policy_maximum": 3600,
+      "minimum_attendance": "6 employees, or 70% of a smaller team",
+      "eligible": "only_if_4_is_at_least_70_percent_of_team",
+      "policy_limit_per_person_per_quarter": 900,
+      "policy_maximum_if_eligible": 3600,
+      "policy_maximum_if_not_eligible": 0,
       "bill_arithmetic_consistent": false,
       "claim_status": "requires_review"
     },
