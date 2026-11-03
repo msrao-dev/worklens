@@ -36,9 +36,11 @@ from backend.ingest import IndexedChunk, extract_text_units
 from backend.rag import (
     GroqRequestError,
     LLMConfigurationError,
+    get_index_status,
     VisionModelUnsupportedError,
     ask_question,
     reset_collection,
+    remove_chunks_by_source,
     store_chunks,
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -79,6 +81,28 @@ def _split_text_units(text_units: list[tuple[int | None, str]]) -> list[IndexedC
     return chunks
 
 
+def _reindex_missing_uploads() -> dict:
+    upload_dir = Path(UPLOAD_DIR).resolve()
+    indexed_sources = set(get_index_status()["sources"])
+    discovered: list[str] = []
+
+    for filepath in sorted(upload_dir.iterdir() if upload_dir.exists() else []):
+        if not filepath.is_file() or filepath.suffix.lower() not in {".pdf", ".docx", ".txt"}:
+            continue
+        discovered.append(filepath.name)
+        if filepath.name in indexed_sources:
+            continue
+
+        chunks = _split_text_units(extract_text_units(str(filepath)))
+        if chunks:
+            store_chunks(chunks, filename=filepath.name)
+
+    return {
+        "discovered_documents": discovered,
+        "index_status": get_index_status(),
+    }
+
+
 class TTSRequest(BaseModel):
     text: str
     voice: Optional[str] = "amy"
@@ -86,6 +110,9 @@ class TTSRequest(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db_and_seed_hr()
+    result = _reindex_missing_uploads()
+    import logging
+    logging.getLogger(__name__).info("Document index startup reconciliation: %s", result)
     yield
 
 
@@ -162,7 +189,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", **get_index_status()}
 
 
 # --- Auth Endpoints ---
@@ -329,6 +356,9 @@ async def ingest(
         raise HTTPException(status_code=422, detail="A filename is required.")
     filepath = os.path.join(UPLOAD_DIR, safe_name)
 
+    if Path(safe_name).suffix.lower() not in {".pdf", ".docx", ".txt"}:
+        raise HTTPException(status_code=422, detail="Only PDF, DOCX, and TXT files are supported.")
+
     with open(filepath, "wb") as f:
         f.write(await file.read())
 
@@ -338,6 +368,7 @@ async def ingest(
             status_code=422,
             detail="No extractable text was found in the uploaded document.",
         )
+    remove_chunks_by_source(safe_name)
     store_chunks(chunks, filename=safe_name)
 
     return {
