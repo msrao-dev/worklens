@@ -331,15 +331,21 @@ def reset_password(
 
 @app.get("/documents/stats")
 def get_document_stats(user = Depends(get_current_user)):
-    results = collection.get(include=["metadatas"])
-    metadatas = results.get("metadatas") or []
-
-    unique_sources = {m.get("source") for m in metadatas if m and m.get("source")}
-
-    return {
-        "count": len(unique_sources),
-        "documents": sorted(list(unique_sources))
-    }
+    import logging
+    try:
+        results = collection.get(include=["metadatas"])
+        metadatas = results.get("metadatas") or []
+        unique_sources = {m.get("source") for m in metadatas if m and m.get("source")}
+        return {
+            "count": len(unique_sources),
+            "documents": sorted(list(unique_sources))
+        }
+    except Exception as exc:
+        logging.getLogger(__name__).exception("Failed to retrieve document stats from collection: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Unable to retrieve document stats: {str(exc)}"
+        )
 
 @app.get("/documents/{filename}")
 def get_document(filename: str, _current_user: dict = Depends(get_current_user)):
