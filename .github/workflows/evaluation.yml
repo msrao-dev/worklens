@@ -4,9 +4,6 @@ name: WorkLens Evaluation
 # smoke  = a few fast cases
 # sanity = every golden case
 on:
-  # TEMPORARY: lets the eval run on this branch before it is on main. Remove before merging.
-  push:
-    branches: [feat/ragas-evaluation]
   workflow_dispatch:
     inputs:
       suite:
