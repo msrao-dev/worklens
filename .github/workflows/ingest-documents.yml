@@ -1,0 +1,106 @@
+name: Ingest Documents
+
+# Manual only: Actions → Ingest Documents → Run workflow.
+# Uploads files from documents/ to the deployed backend's /ingest endpoint.
+# The backend keeps uploads inside its container, so re-run this after a backend restart or deploy.
+on:
+  workflow_dispatch:
+    inputs:
+      file:
+        description: File name in documents/ to ingest (leave blank for all)
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ingest-documents
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      API_URL: ${{ vars.WORKLENS_API_URL }}
+      HR_EMAIL: ${{ secrets.WORKLENS_HR_EMAIL }}
+      HR_PASSWORD: ${{ secrets.WORKLENS_HR_PASSWORD }}
+      FILE_NAME: ${{ inputs.file }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ingest documents
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "$API_URL" ] || [ -z "$HR_EMAIL" ] || [ -z "$HR_PASSWORD" ]; then
+            echo "::error::Set the WORKLENS_API_URL variable and the WORKLENS_HR_EMAIL / WORKLENS_HR_PASSWORD secrets."
+            exit 1
+          fi
+          API_URL="${API_URL%/}"
+
+          # Pick the files: one named file, or every PDF/DOCX/TXT directly in documents/ (subfolders skipped).
+          files=()
+          if [ -n "$FILE_NAME" ]; then
+            path="documents/$(basename "$FILE_NAME")"
+            if [ ! -f "$path" ]; then
+              echo "::error::$path not found."
+              exit 1
+            fi
+            files+=("$path")
+          else
+            while IFS= read -r -d '' path; do
+              files+=("$path")
+            done < <(find documents -maxdepth 1 -type f \( -iname '*.pdf' -o -iname '*.docx' -o -iname '*.txt' \) -print0 | sort -z)
+          fi
+
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "::error::No PDF, DOCX or TXT files found in documents/."
+            exit 1
+          fi
+
+          # /ingest accepts HR users only, so log in as HR first.
+          login_body=$(jq -n --arg email "$HR_EMAIL" --arg password "$HR_PASSWORD" '{email: $email, password: $password}')
+          login_status=$(curl -sS -o login.json -w '%{http_code}' -X POST "$API_URL/auth/login" \
+            -H 'Content-Type: application/json' -d "$login_body")
+          if [ "$login_status" != "200" ]; then
+            echo "::error::Login failed (HTTP $login_status): $(jq -r '.detail // empty' login.json)"
+            exit 1
+          fi
+          token=$(jq -r '.access_token' login.json)
+          echo "::add-mask::$token"
+          rm -f login.json
+
+          {
+            echo "## Document ingestion"
+            echo ""
+            echo "| File | Result | Chunks |"
+            echo "|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          failed=0
+          for path in "${files[@]}"; do
+            name=$(basename "$path")
+            echo "Ingesting $name"
+            status=$(curl -sS -o response.json -w '%{http_code}' --max-time 600 -X POST "$API_URL/ingest" \
+              -H "Authorization: Bearer $token" -F "file=@$path") || status="000"
+            if [ "$status" = "200" ]; then
+              chunks=$(jq -r '.chunks' response.json)
+              echo "  ok: $chunks chunks"
+              echo "| $name | ✅ ingested | $chunks |" >> "$GITHUB_STEP_SUMMARY"
+            else
+              detail=$(jq -r '.detail // empty' response.json 2>/dev/null || true)
+              echo "::error::$name failed (HTTP $status) $detail"
+              echo "| $name | ❌ HTTP $status ${detail} | - |" >> "$GITHUB_STEP_SUMMARY"
+              failed=1
+            fi
+          done
+          rm -f response.json
+
+          exit "$failed"
