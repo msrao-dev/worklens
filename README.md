@@ -43,6 +43,12 @@ below `evaluation/thresholds.json`. Needs `LLM_PROVIDER=groq` and `EVAL_GROQ_API
 a key from a separate Groq account, so evaluation never spends the live app's quota. The main
 `GROQ_API_KEY` is never used by the evaluation.
 
+One-time setup (on top of the app's `requirements.txt`):
+```
+pip install --use-deprecated=legacy-resolver -r evaluation/requirements.txt
+pip install --no-deps "langchain-community==0.4.1"
+```
+
 ```
 python -m evaluation.run_suite --suite smoke     # few fast cases
 python -m evaluation.run_suite --suite sanity    # every case

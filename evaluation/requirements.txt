@@ -1,0 +1,8 @@
+# Evaluation-only dependencies, installed on top of the app's requirements.txt.
+# Kept out of the root file: ragas conflicts with the app's torch/huggingface_hub/fsspec
+# pins under pip's normal resolver, which would break the backend Docker build.
+# Install with:
+#   pip install --use-deprecated=legacy-resolver -r evaluation/requirements.txt
+#   pip install --no-deps "langchain-community==0.4.1"
+openai==2.54.0
+ragas==0.4.3
