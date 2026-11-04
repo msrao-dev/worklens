@@ -366,3 +366,7 @@ button{font-family:inherit;cursor:pointer}
 .idx-loading i:nth-child(3){animation-delay:.4s}
 .idx-error{background:none;border:none;padding:0;font:inherit;color:var(--warn);cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .idx-error:hover{color:var(--ink)}
+
+/* TTS loading spinner */
+.act.play .spin{animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
