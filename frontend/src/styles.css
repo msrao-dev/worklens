@@ -122,7 +122,8 @@ button{font-family:inherit;cursor:pointer}
   font-family:var(--font-mono);font-size:11px;font-weight:500}
 .avatar.bot{background:var(--brand);color:#fff}
 .avatar.bot svg{width:18px;height:18px}
-.avatar.me{background:var(--surface);border:1px solid var(--line);color:var(--ink-soft)}
+.avatar.me{background:linear-gradient(135deg,var(--brand-soft),var(--surface));border:1px solid var(--line);color:var(--brand)}
+.avatar.me svg{width:20px;height:20px}
 .bubble{max-width:calc(100% - 50px)}
 .user .bubble{background:var(--user-bubble);color:var(--user-ink);padding:11px 15px;border-radius:14px 14px 4px 14px;
   font-size:14.5px}
