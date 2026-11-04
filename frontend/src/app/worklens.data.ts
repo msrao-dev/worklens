@@ -182,5 +182,16 @@ export const RELATED: Record<string, string[]> = {
   approvals: ['reimburse', 'leavebal']
 };
 
-/** Offered when nothing in the knowledge base matches. */
-export const POPULAR = ['leavebal', 'password', 'insurance'];
+/** Offered before a chat starts, and when nothing in the knowledge base matches. */
+export const STARTER_QUESTIONS = [
+  'How many sick leaves and casual leaves are employees entitled to annually?',
+  'What is the notice period during probation and after confirmation?',
+  'An employee takes sick leave for 4 consecutive days. Is a medical certificate required?'
+];
+
+/** Offered after a greeting. */
+export const GREETING_QUESTIONS = [
+  'What are the eligibility criteria and duration of maternity leave?',
+  'How many employees must participate for team outing reimbursement to be eligible?',
+  'An employee takes sick leave for 4 consecutive days. Is a medical certificate required?'
+];

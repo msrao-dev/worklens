@@ -5,7 +5,7 @@ import { HttpClient, HttpHeaders } from '@angular/common/http';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { SafeHtmlPipe } from './safe-html.pipe';
 import { LoginComponent, User } from './login.component';
-import { KB, QUESTIONS, RELATED, POPULAR, KBEntry, Source } from './worklens.data';
+import { KB, QUESTIONS, RELATED, STARTER_QUESTIONS, GREETING_QUESTIONS, KBEntry, Source } from './worklens.data';
 import { environment } from '../environments/environment';
 
 interface Attachment {
@@ -77,6 +77,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   dragging = false;
   speaking: Msg | null = null;
   fallbackParas = FALLBACK_PARAS;
+  starterQuestions = STARTER_QUESTIONS;
   dark = false;
   railOpen = false;
   selectedSource: Source | null = null;
@@ -194,11 +195,6 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   // --- Session -------------------------------------------------------------
-
-  get initials(): string {
-    const parts = (this.user?.name || '').split(' ').filter(Boolean);
-    return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
-  }
 
   onLogin(user: User): void {
     this.user = user;
@@ -358,7 +354,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
             this.push(typingMsg, {
               role: 'bot',
               note: res.answer,
-              followups: suggestedQuestions.length ? suggestedQuestions : POPULAR.map((id) => QUESTIONS[id])
+              followups: suggestedQuestions.length ? suggestedQuestions : GREETING_QUESTIONS
             });
             return;
           }
@@ -421,7 +417,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
       this.push(typingMsg, {
         role: 'bot',
         note: 'Hello! I am your WorkLens assistant. How can I assist you with the employee handbook, leave policy, or workplace benefits today?',
-        followups: POPULAR.map((id) => QUESTIONS[id])
+        followups: GREETING_QUESTIONS
       });
       return;
     }
@@ -449,7 +445,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
       fallback: true,
       q: text,
       imageText,
-      followups: followups && followups.length ? followups : POPULAR.map((id) => QUESTIONS[id])
+      followups: followups && followups.length ? followups : STARTER_QUESTIONS
     };
   }
 
