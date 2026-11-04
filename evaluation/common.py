@@ -74,10 +74,7 @@ def ask_with_retry(question, images=None):
 
     for delay in (*GROQ_RETRY_DELAYS, None):
         try:
-            # Follow-up suggestions aren't scored, so skip that extra Groq call.
-            response = ask_question(
-                question, images=images, suggest=False, max_words=ANSWER_MAX_WORDS
-            )
+            response = ask_question(question, images=images, max_words=ANSWER_MAX_WORDS)
         except GroqRequestError as exc:
             if delay is None or "rate limit" not in str(exc).lower():
                 raise

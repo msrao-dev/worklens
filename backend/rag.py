@@ -231,10 +231,8 @@ def ask_question(
     question: str,
     images: list[ImageInput] | None = None,
     history: list[dict[str, str]] | None = None,
-    suggest: bool = True,
     max_words: int | None = None,
 ):
-    """Answer a question; pass suggest=False to skip the follow-up-question LLM call."""
     history = history or []
 
     # Handle pure greetings dynamically via LLM without vector lookup
@@ -404,12 +402,11 @@ Instructions:
 """
 
     answer_text = generate_answer(prompt, images) if images else generate_answer(prompt)
-    suggested_questions = []
-    if suggest:
-        try:
-            suggested_questions = generate_suggested_questions(question, answer_text, context)
-        except Exception:
-            logger.exception("Could not generate suggested questions.")
+    try:
+        suggested_questions = generate_suggested_questions(question, answer_text, context)
+    except Exception:
+        logger.exception("Could not generate suggested questions.")
+        suggested_questions = []
 
     return {
         "answer": answer_text,
