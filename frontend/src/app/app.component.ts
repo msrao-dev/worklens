@@ -35,6 +35,7 @@ interface Msg {
   streaming?: boolean;
   /** HTML revealed so far while streaming. */
   typed?: string;
+  audioId?: string;
 }
 
 const FALLBACK_PARAS = [
@@ -92,6 +93,8 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   docError = false;
 
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
+  audioLoading = false;
+  audioPaused = false;
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
 
@@ -315,10 +318,11 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
         const form = new FormData();
         form.append('question', text);
         form.append('history', JSON.stringify(historyPayload));
+        form.append('voice', this.selectedVoice);
         images.forEach((image) => form.append('image', image.file!, image.name));
         body = form;
       } else {
-        body = { question: text, history: historyPayload };
+        body = { question: text, history: historyPayload, voice: this.selectedVoice };
       }
 
       const headers = new HttpHeaders({
@@ -338,6 +342,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
         }>;
         suggested_questions?: string[];
         is_greeting?: boolean;
+        audio_id?: string;
       }>(this.apiUrl, body, { headers }).subscribe({
         next: (res) => {
           const suggestedQuestions = Array.isArray(res.suggested_questions)
@@ -393,7 +398,8 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
             entry,
             q: text || query,
             imageText,
-            followups: suggestedQuestions
+            followups: suggestedQuestions,
+            audioId: res.audio_id
           });
         },
         error: (err) => {
@@ -469,25 +475,40 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   speak(m: Msg): void {
-    if (this.speaking === m) {
-      this.stopSpeaking();
+    if (this.speaking === m && this.currentAudio && this.audioPaused) {
+      this.currentAudio.play();
+      this.audioPaused = false;
+      return;
+    }
+
+    if (this.speaking === m && this.currentAudio && !this.audioPaused) {
+      this.currentAudio.pause();
+      this.audioPaused = true;
       return;
     }
 
     this.stopSpeaking();
     this.speaking = m;
+    this.audioLoading = true;
+    this.audioPaused = false;
 
     const textToRead = this.plainText(m);
     const headers = new HttpHeaders({
       Authorization: `Bearer ${this.user?.token || ''}`
     });
 
-    this.http.post(this.ttsUrl, { text: textToRead, voice: this.selectedVoice }, {
+    const payload: { text: string; voice: string; audio_id?: string } = {
+      text: textToRead,
+      voice: this.selectedVoice,
+      audio_id: m.audioId
+    };
+
+    this.http.post(this.ttsUrl, payload, {
       headers,
       responseType: 'blob'
     }).subscribe({
       next: (blob) => {
-        // Cancelled or switched messages while waiting for network
+        this.audioLoading = false;
         if (this.speaking !== m) return;
 
         this.currentAudioUrl = URL.createObjectURL(blob);
@@ -499,34 +520,49 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
         };
         audio.onerror = () => {
           this.zone.run(() => {
-            // Audio decode error -> fall back to browser speech
             this.speakWithBrowser(textToRead, m);
           });
         };
 
-        audio.play().catch(() => {
-          // Autoplay blocked -> fall back to browser speech
+        audio.play().then(() => {
+          this.audioPaused = false;
+        }).catch(() => {
           this.speakWithBrowser(textToRead, m);
         });
       },
       error: () => {
-        // Backend failure (e.g. 503, timeout, network error) -> Fall back to browser speech
+        this.audioLoading = false;
         if (this.speaking !== m) return;
         this.speakWithBrowser(textToRead, m);
       }
     });
   }
 
-  /** Browser-native SpeechSynthesis fallback */
+  stopSpeaking(): void {
+    if (this.currentAudio) {
+      this.currentAudio.pause();
+      this.currentAudio.currentTime = 0;
+      this.currentAudio = null;
+    }
+    if (this.currentAudioUrl) {
+      URL.revokeObjectURL(this.currentAudioUrl);
+      this.currentAudioUrl = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    this.speaking = null;
+    this.audioLoading = false;
+    this.audioPaused = false;
+  }
+
   private speakWithBrowser(text: string, m: Msg): void {
-    console.log("speakWithBrowser");
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
       this.toast('Speech synthesis is not supported on this device.');
       this.stopSpeaking();
       return;
     }
 
-    // Stop any existing audio or speech
     if (this.currentAudio) {
       this.currentAudio.pause();
       this.currentAudio = null;
@@ -536,7 +572,6 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = 'en-US';
 
-    // Pick an appropriate client-side voice matching the selection
     const voices = window.speechSynthesis.getVoices();
     if (voices.length) {
       const isAmy = this.selectedVoice === 'amy';
@@ -549,43 +584,22 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
         return v.lang.startsWith('en') && targetGenderKeywords.some((kw) => name.includes(kw));
       }) || voices.find((v) => v.lang.startsWith('en'));
 
-      if (matchedVoice) {
-        utterance.voice = matchedVoice;
-      }
+      if (matchedVoice) utterance.voice = matchedVoice;
     }
 
-    utterance.onstart = () => {
-      console.log('SpeechSynthesis: started');
-    };
-
-    utterance.onend = (e) => {
-      console.log('SpeechSynthesis: ended', e);
+    utterance.onend = () => {
       this.zone.run(() => this.stopSpeaking());
     };
 
     utterance.onerror = (e) => {
-      console.error('SpeechSynthesis error:', e.error, e);
       this.toast(`Browser speech failed: ${e.error}`);
       this.zone.run(() => this.stopSpeaking());
     };
 
     this.speaking = m;
+    this.audioPaused = false;
+    this.audioLoading = false;
     window.speechSynthesis.speak(utterance);
-  }
-
-  private stopSpeaking(): void {
-    if (this.currentAudio) {
-      this.currentAudio.pause();
-      this.currentAudio = null;
-    }
-    if (this.currentAudioUrl) {
-      URL.revokeObjectURL(this.currentAudioUrl);
-      this.currentAudioUrl = null;
-    }
-    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    this.speaking = null;
   }
 
   // --- Typing animation ----------------------------------------------------

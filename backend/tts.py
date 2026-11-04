@@ -89,19 +89,21 @@ def get_voice_instance(voice_name: str):
     return _VOICE_INSTANCES[name]
 
 
-def get_cache_path(voice_name: str, sanitized_text: str) -> str:
+def get_cache_path(voice_name: str, sanitized_text: str, audio_id: Optional[str] = None) -> str:
+    if audio_id:
+        return os.path.join(CACHE_DIR, f"{audio_id}_{voice_name}.wav")
     raw = f"{voice_name}:{sanitized_text}".encode("utf-8")
     key = hashlib.sha256(raw).hexdigest()
     return os.path.join(CACHE_DIR, f"{key}.wav")
 
 
-def synthesize_speech(text: str, voice_name: str = "amy") -> tuple[bytes, str]:
+def synthesize_speech(text: str, voice_name: str = "amy", audio_id: Optional[str] = None) -> tuple[bytes, str]:
     """Synthesizes text in sentence chunks, merges the frames, and caches the result."""
     clean_text = sanitize_text_for_speech(text)
     if not clean_text:
         clean_text = "Nothing to read."
 
-    cached_file = get_cache_path(voice_name, clean_text)
+    cached_file = get_cache_path(voice_name, clean_text, audio_id=audio_id)
     if os.path.exists(cached_file):
         try:
             with open(cached_file, "rb") as f:

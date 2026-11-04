@@ -1,3 +1,4 @@
+import asyncio
 import io
 import json
 import os
@@ -106,7 +107,19 @@ def _reindex_missing_uploads() -> dict:
     }
 
 
+_ACTIVE_TTS_JOBS: dict[str, asyncio.Event] = {}
+
+def _bg_synthesize(text: str, voice: str, audio_id: str, event: asyncio.Event):
+    try:
+        synthesize_speech(text, voice_name=voice, audio_id=audio_id)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Background synthesis failed for %s: %s", audio_id, exc)
+    finally:
+        event.set()
+        _ACTIVE_TTS_JOBS.pop(audio_id, None)
+
 class TTSRequest(BaseModel):
+    audio_id: Optional[str] = None
     text: str
     voice: Optional[str] = "amy"
 
@@ -491,6 +504,23 @@ async def query(
     try:
         response = ask_question(question.strip(), images if images else None, history=history)
         response.setdefault("suggested_questions", [])
+
+        # Auto pre-generate speech in the background without blocking the query response
+        answer_text = response.get("answer", "")
+        if answer_text and not response.get("is_greeting"):
+            req_voice = (body.get("voice") if content_type == "application/json" else form.get("voice")) or "amy"
+            req_voice = str(req_voice).strip().lower()
+            if req_voice not in ("amy", "ryan"):
+                req_voice = "amy"
+
+            gen_id = f"aud_{os.urandom(8).hex()}"
+            response["audio_id"] = gen_id
+
+            loop = asyncio.get_running_loop()
+            ev = asyncio.Event()
+            _ACTIVE_TTS_JOBS[gen_id] = ev
+            loop.run_in_executor(None, _bg_synthesize, answer_text, req_voice, gen_id, ev)
+
         return response
     except VisionModelUnsupportedError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -511,19 +541,31 @@ async def text_to_speech(
     background_tasks: BackgroundTasks,
     _current_user: dict = Depends(get_current_user),
 ):
-    text = payload.text.strip()
     voice = (payload.voice or "amy").strip().lower()
-
-    if not text:
-        raise HTTPException(status_code=400, detail="Text payload is required.")
-
     if voice not in ("amy", "ryan"):
         voice = "amy"
 
-    # Offload the chunked CPU synthesis so Uvicorn can still respond to health checks
-    wav_bytes, _ = await run_in_threadpool(synthesize_speech, text, voice_name=voice)
+    audio_id = (payload.audio_id or "").strip()
 
-    # Trigger post-response cleanup in the background
+    # 1. Check if audio_id is provided, in-flight, or already on disk
+    if audio_id:
+        cache_path = os.path.join(os.getenv("TTS_CACHE_DIR", "./backend/cache/audio"), f"{audio_id}_{voice}.wav")
+        if audio_id in _ACTIVE_TTS_JOBS:
+            try:
+                await asyncio.wait_for(_ACTIVE_TTS_JOBS[audio_id].wait(), timeout=12.0)
+            except asyncio.TimeoutError:
+                pass
+
+        if os.path.exists(cache_path):
+            background_tasks.add_task(cleanup_audio_cache)
+            with open(cache_path, "rb") as f:
+                return Response(content=f.read(), media_type="audio/wav")
+
+    # 2. Fallback on-demand synthesis using provided text
+    text = payload.text.strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Text payload is required.")
+
+    wav_bytes, _ = await run_in_threadpool(synthesize_speech, text, voice_name=voice, audio_id=audio_id or None)
     background_tasks.add_task(cleanup_audio_cache)
-
     return Response(content=wav_bytes, media_type="audio/wav")
