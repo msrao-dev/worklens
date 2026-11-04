@@ -63,7 +63,34 @@
       </button>
       <div class="top-title">Knowledge Assistant</div>
       <span class="demo-badge">{{ user.role }}</span>
-      <div class="ctx"><span class="dot"></span>Signed in as <b>{{ user.email }}</b> ({{ user.role }})</div>
+      <!-- Topbar user pill with dropdown -->
+      <div class="user-menu-wrap">
+        <button type="button" class="ctx ctx-btn" (click)="toggleUserMenu($event)" [class.active]="userMenuOpen" aria-haspopup="true" [attr.aria-expanded]="userMenuOpen">
+          <span class="dot"></span>
+          <span>Signed in as <b>{{ user.email }}</b> ({{ user.role }})</span>
+          <svg class="chevron" [class.open]="userMenuOpen" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <div class="user-dropdown" *ngIf="userMenuOpen" (click)="$event.stopPropagation()">
+          <div class="user-dropdown-header">
+            <div class="user-dd-name">{{ user.name }}</div>
+            <div class="user-dd-email">{{ user.email }}</div>
+          </div>
+          <div class="user-dropdown-divider"></div>
+          <button type="button" class="user-dropdown-item" *ngIf="user.role === 'HR'" (click)="openRegisterModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+            <span>Register new user</span>
+          </button>
+          <button type="button" class="user-dropdown-item" (click)="openResetPasswordModal()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-1.5 1.5L14 9l-1.5-1.5-2 2 1.5 1.5L9 14l-1.5-1.5-2 2 1.5 1.5L3 20a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-1l3.5-3.5 1.5 1.5 2-2-1.5-1.5 3-3 1.5 1.5 2-2-1.5-1.5L21 2z"/><circle cx="7.5" cy="16.5" r=".5" fill="currentColor"/></svg>
+            <span>Change password</span>
+          </button>
+          <button type="button" class="user-dropdown-item danger" (click)="closeUserMenu(); logout()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+            <span>Sign out</span>
+          </button>
+        </div>
+      </div>
 
       <!-- Voice Selector Toggle -->
       <button class="voice-toggle-btn" (click)="toggleVoice()" [title]="'Current voice: ' + (selectedVoice === 'amy' ? 'Amy' : 'Ryan')">
@@ -334,4 +361,91 @@
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l5 5L20 6"/></svg>
   <span>{{ toastMsg }}</span>
   <button class="toast-action" *ngIf="toastAction" type="button" (click)="runToastAction()">{{ toastAction.label }}</button>
+</div>
+
+<!-- Reset Password Modal -->
+<div class="overlay reset-pw-overlay" [class.show]="showResetPwModal" (click)="closeResetPasswordModal()">
+  <div class="reset-pw-card" role="dialog" aria-modal="true" aria-labelledby="reset-pw-title" (click)="$event.stopPropagation()">
+    <div class="reset-pw-head">
+      <div class="reset-pw-title" id="reset-pw-title">Change Password</div>
+      <button type="button" class="icon-btn" (click)="closeResetPasswordModal()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <form class="reset-pw-body" (ngSubmit)="submitResetPassword()" novalidate>
+      <label for="new-pw">New password</label>
+      <div class="pw">
+        <input id="new-pw" name="newPw" [type]="showResetPwNew ? 'text' : 'password'" autocomplete="new-password"
+          [(ngModel)]="resetPwNew" placeholder="Enter new password" />
+        <button type="button" class="pw-toggle" (click)="showResetPwNew = !showResetPwNew">
+          {{ showResetPwNew ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+
+      <label for="confirm-pw">Confirm new password</label>
+      <div class="pw">
+        <input id="confirm-pw" name="confirmPw" [type]="showResetPwConfirm ? 'text' : 'password'" autocomplete="new-password"
+          [(ngModel)]="resetPwConfirm" placeholder="Re-enter new password" />
+        <button type="button" class="pw-toggle" (click)="showResetPwConfirm = !showResetPwConfirm">
+          {{ showResetPwConfirm ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+
+      <div class="login-error" *ngIf="resetPwError" role="alert">{{ resetPwError }}</div>
+
+      <div class="reset-pw-actions">
+        <button type="button" class="btn-cancel" (click)="closeResetPasswordModal()" [disabled]="resetPwBusy">Cancel</button>
+        <button type="submit" class="login-btn reset-btn" [disabled]="resetPwBusy || !resetPwNew || !resetPwConfirm">
+          {{ resetPwBusy ? 'Updating…' : 'Update password' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Register New User Modal (HR Only) -->
+<div class="overlay reset-pw-overlay" [class.show]="showRegisterModal" (click)="closeRegisterModal()">
+  <div class="reset-pw-card" role="dialog" aria-modal="true" aria-labelledby="register-user-title" (click)="$event.stopPropagation()">
+    <div class="reset-pw-head">
+      <div class="reset-pw-title" id="register-user-title">Register New User</div>
+      <button type="button" class="icon-btn" (click)="closeRegisterModal()" aria-label="Close">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <form class="reset-pw-body" (ngSubmit)="submitRegister()" novalidate>
+      <label for="reg-email">Work email</label>
+      <input id="reg-email" name="regEmail" type="email" autocomplete="off"
+        [(ngModel)]="regEmail" placeholder="employee@company.com" />
+
+      <label for="reg-pw">Initial password</label>
+      <div class="pw">
+        <input id="reg-pw" name="regPassword" [type]="showRegPw ? 'text' : 'password'" autocomplete="new-password"
+          [(ngModel)]="regPassword" placeholder="Min 6 characters" />
+        <button type="button" class="pw-toggle" (click)="showRegPw = !showRegPw">
+          {{ showRegPw ? 'Hide' : 'Show' }}
+        </button>
+      </div>
+
+      <label>System Role</label>
+      <div class="role-selector">
+        <label class="role-chip" [class.selected]="regRole === 'EMPLOYEE'">
+          <input type="radio" name="roleOption" value="EMPLOYEE" [(ngModel)]="regRole" />
+          <span>Employee</span>
+        </label>
+        <label class="role-chip" [class.selected]="regRole === 'HR'">
+          <input type="radio" name="roleOption" value="HR" [(ngModel)]="regRole" />
+          <span>HR Admin</span>
+        </label>
+      </div>
+
+      <div class="login-error" *ngIf="regError" role="alert">{{ regError }}</div>
+
+      <div class="reset-pw-actions">
+        <button type="button" class="btn-cancel" (click)="closeRegisterModal()" [disabled]="regBusy">Cancel</button>
+        <button type="submit" class="login-btn reset-btn" [disabled]="regBusy || !regEmail.trim() || !regPassword.trim()">
+          {{ regBusy ? 'Registering…' : 'Register' }}
+        </button>
+      </div>
+    </form>
+  </div>
 </div>

@@ -1,4 +1,4 @@
-import { Component, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
+import { Component, HostListener, ElementRef, ViewChild, AfterViewChecked, OnDestroy, OnInit, NgZone, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
@@ -95,6 +95,21 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   selectedVoice: 'amy' | 'ryan' = (localStorage.getItem('wl-voice') as 'amy' | 'ryan') || 'amy';
   audioLoading = false;
   audioPaused = false;
+  userMenuOpen = false;
+  showResetPwModal = false;
+  resetPwNew = '';
+  resetPwConfirm = '';
+  showResetPwNew = false;
+  showResetPwConfirm = false;
+  resetPwBusy = false;
+  showRegisterModal = false;
+  regEmail = '';
+  regPassword = '';
+  regRole: 'EMPLOYEE' | 'HR' = 'EMPLOYEE';
+  showRegPw = false;
+  regBusy = false;
+  regError = '';
+  resetPwError = '';
   private currentAudio: HTMLAudioElement | null = null;
   private currentAudioUrl: string | null = null;
 
@@ -205,6 +220,150 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
     } catch {}
+  }
+
+
+  toggleUserMenu(event?: MouseEvent): void {
+    if (event) event.stopPropagation();
+    this.userMenuOpen = !this.userMenuOpen;
+  }
+
+  closeUserMenu(): void {
+    this.userMenuOpen = false;
+  }
+
+  @HostListener('document:click', ['$event'])
+  onDocumentClick(event: MouseEvent): void {
+    const target = event.target as HTMLElement;
+    if (!target.closest('.user-menu-wrap')) {
+      this.closeUserMenu();
+    }
+  }
+
+  openResetPasswordModal(): void {
+    this.closeUserMenu();
+    this.resetPwNew = '';
+    this.resetPwConfirm = '';
+    this.resetPwError = '';
+    this.resetPwBusy = false;
+    this.showResetPwNew = false;
+    this.showResetPwConfirm = false;
+    this.showResetPwModal = true;
+  }
+
+  closeResetPasswordModal(): void {
+    this.showResetPwModal = false;
+    this.resetPwError = '';
+    this.resetPwBusy = false;
+  }
+
+
+  openRegisterModal(): void {
+    this.closeUserMenu();
+    this.regEmail = '';
+    this.regPassword = '';
+    this.regRole = 'EMPLOYEE';
+    this.showRegPw = false;
+    this.regError = '';
+    this.regBusy = false;
+    this.showRegisterModal = true;
+  }
+
+  closeRegisterModal(): void {
+    this.showRegisterModal = false;
+    this.regError = '';
+    this.regBusy = false;
+  }
+
+  submitRegister(): void {
+    const emailVal = this.regEmail.trim();
+    const pwVal = this.regPassword.trim();
+
+    if (!emailVal) {
+      this.regError = 'Work email is required.';
+      return;
+    }
+    if (!pwVal) {
+      this.regError = 'Initial password is required.';
+      return;
+    }
+    if (pwVal.length < 6) {
+      this.regError = 'Password must be at least 6 characters.';
+      return;
+    }
+
+    this.regBusy = true;
+    this.regError = '';
+
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ''}`
+    });
+
+    this.http.post<{ status: string; message: string; user?: any }>(
+      `${this.backendUrl}/auth/register`,
+      {
+        email: emailVal,
+        password: pwVal,
+        role: this.regRole
+      },
+      { headers }
+    ).subscribe({
+      next: () => {
+        this.regBusy = false;
+        this.closeRegisterModal();
+        this.toast(`User ${emailVal} registered successfully!`);
+      },
+      error: (err) => {
+        this.regBusy = false;
+        const detail = err.error?.detail;
+        this.regError = typeof detail === 'string' ? detail : 'Unable to register user.';
+      }
+    });
+  }
+
+  submitResetPassword(): void {
+    const pw = this.resetPwNew.trim();
+    const confirm = this.resetPwConfirm.trim();
+
+    if (!pw) {
+      this.resetPwError = 'Please enter a new password.';
+      return;
+    }
+    if (pw.length < 6) {
+      this.resetPwError = 'Password must be at least 6 characters.';
+      return;
+    }
+    if (pw !== confirm) {
+      this.resetPwError = 'Passwords do not match.';
+      return;
+    }
+
+    this.resetPwBusy = true;
+    this.resetPwError = '';
+
+    const headers = new HttpHeaders({
+      Authorization: `Bearer ${this.user?.token || ''}`
+    });
+
+    this.http.post<{ status: string; message: string }>(
+      `${this.backendUrl}/auth/reset-password`,
+      {
+        new_password: pw,
+        retype_new_password: confirm
+      },
+      { headers }
+    ).subscribe({
+      next: () => {
+        this.resetPwBusy = false;
+        this.closeResetPasswordModal();
+        this.toast('Password updated successfully!');
+      },
+      error: (err) => {
+        this.resetPwBusy = false;
+        const detail = err.error?.detail;
+        this.resetPwError = typeof detail === 'string' ? detail : 'Failed to update password. Try again.';
+      }
+    });
   }
 
   logout(): void {
