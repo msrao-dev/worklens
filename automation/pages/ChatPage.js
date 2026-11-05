@@ -4,8 +4,9 @@ class ChatPage {
     constructor(page) {
         this.page = page;
         this.questionInput = page.locator('textarea[name="q"]');
-        this.sendButton = page.locator('button[type="submit"]');
         this.composer = page.locator('form.composer');
+        // Scoped to the chat form: the reset-password and register forms also have submit buttons.
+        this.sendButton = this.composer.locator('button.send');
         // Add inside the constructor
         this.answer = page.locator('div.answer');
     }
