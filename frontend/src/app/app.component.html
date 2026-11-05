@@ -23,14 +23,14 @@
     <div class="rail-scroll">
       <div class="rail-label rail-label-row">
         <span>History</span>
-        <button class="clear-history" *ngIf="history.length" (click)="clearHistory()">Clear</button>
+        <button class="clear-history" *ngIf="chats.length" (click)="clearHistory()">Clear</button>
       </div>
       <div class="history">
-        <button *ngFor="let q of history; trackBy: trackByIndex" (click)="ask(q)" [title]="q">
+        <button *ngFor="let c of chats; trackBy: trackByIndex" [class.active]="c === activeChat" (click)="openChat(c)" [title]="c.title">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
-          <span>{{ q }}</span>
+          <span>{{ c.title }}</span>
         </button>
-        <div class="history-empty" *ngIf="!history.length">Questions you ask will show up here.</div>
+        <div class="history-empty" *ngIf="!chats.length">Your chats will show up here.</div>
       </div>
     </div>
     <div class="rail-foot">
@@ -109,7 +109,7 @@
       <div class="thread">
         <div class="welcome">
           <h1>What can I help you find?</h1>
-          <p>You can type your question or add an image using the + button, drag and drop, or paste. Ask anything about HR, IT, benefits, facilities or onboarding. WorkLens answers from your company’s own approved documents and shows you exactly where each answer comes from.</p>
+          <p>Ask anything about HR, IT, benefits, facilities or onboarding. WorkLens answers from your company’s own approved documents and shows you exactly where each answer comes from. You can type your question or add an image using the + button, drag and drop, or paste.</p>
           <div class="followups" *ngIf="!messages.length">
             <div class="followups-h">Try asking</div>
             <div class="followups-list">
