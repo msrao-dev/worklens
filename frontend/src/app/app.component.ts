@@ -38,6 +38,12 @@ interface Msg {
   audioId?: string;
 }
 
+/** A saved conversation, listed in the sidebar's History. */
+interface Chat {
+  title: string;
+  messages: Msg[];
+}
+
 const FALLBACK_PARAS = [
   'I couldn’t find this in the company documents available to me.',
   'None of the indexed HR, IT, Facilities or Finance documents cover it closely enough to give a reliable answer, so I won’t guess. Try rephrasing, or I can route it to the right team.'
@@ -47,8 +53,10 @@ const FALLBACK_PARAS = [
 const MIN_MATCH_SCORE = 1;
 
 const USER_KEY = 'wl-user';
-const HISTORY_KEY = 'wl-history';
-const HISTORY_MAX = 20;
+/** The old question list, shared by everyone on the browser. Removed on load. */
+const LEGACY_HISTORY_KEY = 'wl-history';
+const CHATS_KEY_PREFIX = 'wl-chats-';
+const CHATS_MAX = 20;
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGES = 3;
 /** Image types the backend accepts as-is. */
@@ -71,7 +79,9 @@ const TYPE_MAX_MS = 4000;
 })
 export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   user: User | null = this.loadUser();
-  history: string[] = this.loadHistory();
+  chats: Chat[] = this.loadChats();
+  /** The chat on screen; null until the first question of a new chat. Shares its array with `messages`. */
+  activeChat: Chat | null = null;
   messages: Msg[] = [];
   input = '';
   pending: Attachment[] = [];
@@ -146,6 +156,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
 
 
   ngOnInit(): void {
+    try {
+      localStorage.removeItem(LEGACY_HISTORY_KEY);
+    } catch {}
     if (this.user) {
       this.fetchDocStats();
     }
@@ -216,6 +229,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   onLogin(user: User): void {
     this.user = user;
+    this.chats = this.loadChats();
     this.fetchDocStats();
     try {
       localStorage.setItem(USER_KEY, JSON.stringify(user));
@@ -370,6 +384,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     this.stopSpeaking();
     this.finishTyping();
     this.railOpen = false;
+    this.releaseChats();
+    this.chats = [];
+    this.startEmptyChat();
     this.user = null;
     try {
       localStorage.removeItem(USER_KEY);
@@ -385,17 +402,32 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     }
   }
 
-  /** Starts a fresh conversation; earlier messages are no longer sent as context. */
+  /** Starts a fresh conversation; earlier messages stay in History but are no longer sent as context. */
   newChat(): void {
     this.stopSpeaking();
     this.finishTyping();
-    for (const m of this.messages) for (const f of m.files || []) if (f.url) URL.revokeObjectURL(f.url);
-    for (const f of this.pending) if (f.url) URL.revokeObjectURL(f.url);
-    this.messages = [];
-    this.pending = [];
-    this.input = '';
+    this.startEmptyChat();
     this.railOpen = false;
     setTimeout(() => this.questionBox?.nativeElement.focus());
+  }
+
+  private startEmptyChat(): void {
+    for (const f of this.pending) if (f.url) URL.revokeObjectURL(f.url);
+    this.messages = [];
+    this.activeChat = null;
+    this.pending = [];
+    this.input = '';
+  }
+
+  /** Reopens a chat from History; new questions carry on from it. */
+  openChat(chat: Chat): void {
+    this.railOpen = false;
+    if (chat === this.activeChat) return;
+    this.stopSpeaking();
+    this.finishTyping();
+    this.activeChat = chat;
+    this.messages = chat.messages;
+    this.pendingScroll = true;
   }
 
   isStale(updated: string): boolean {
@@ -425,8 +457,8 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   /** Gathers previous conversation turns to provide conversational context for follow-up questions. */
-  private getChatHistory(): Array<{ role: 'user' | 'assistant'; text: string }> {
-    return this.messages
+  private getChatHistory(messages: Msg[]): Array<{ role: 'user' | 'assistant'; text: string }> {
+    return messages
       .filter((m) => !m.typing)
       .map((m) => {
         if (m.role === 'user') {
@@ -445,9 +477,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     text = (text || '').trim();
     if (!text && !files.length) return;
     this.messages.push({ role: 'user', text, files });
-    if (text) this.remember(text);
     const typingMsg: Msg = { role: 'bot', typing: true };
     this.messages.push(typingMsg);
+    this.rememberChat(text || files[0]?.name || 'Image question');
     this.pendingScroll = true;
     this.railOpen = false;
 
@@ -463,6 +495,9 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
   }
 
   private reply(typingMsg: Msg, text: string, files: Attachment[], hadImages: boolean, fromImage: string): void {
+    // The reader may have moved to another chat, or cleared this one, during the pause.
+    const chat = this.chatWith(typingMsg);
+    if (!chat) return;
     const query = [text, fromImage].filter(Boolean).join(' ');
     const imageText = fromImage || undefined;
     const images = files.filter((f) => f.url && f.file);
@@ -470,7 +505,7 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     // Real API call to the FastAPI backend, unless mock data is switched on.
     if ((text || images.length) && !this.useMock) {
       // Exclude the current user message to retain prior dialogue context only
-      const historyPayload = this.getChatHistory().slice(0, -1);
+      const historyPayload = this.getChatHistory(chat.messages).slice(0, -1);
 
       let body: object | FormData;
       if (images.length) {
@@ -614,11 +649,17 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
     };
   }
 
-  /** Replace the typing indicator with the reply, then type the reply out. */
+  /**
+   * Replace the typing indicator with the reply in the chat that asked, then type the reply out if that chat
+   * is on screen. The reply is dropped if the chat was cleared or the user signed out while waiting.
+   */
   private push(typingMsg: Msg, reply: Msg): void {
-    const i = this.messages.indexOf(typingMsg);
-    if (i > -1) this.messages.splice(i, 1);
-    this.messages.push(reply);
+    const chat = this.chatWith(typingMsg);
+    if (!chat) return;
+    chat.messages.splice(chat.messages.indexOf(typingMsg), 1);
+    chat.messages.push(reply);
+    this.saveChats();
+    if (chat !== this.activeChat) return;
     this.autoTop = -1;
     this.followReply = true;
     this.startTyping(reply);
@@ -845,31 +886,58 @@ export class AppComponent implements OnInit, AfterViewChecked, OnDestroy {
 
   // --- History -------------------------------------------------------------
 
-  private loadHistory(): string[] {
+  /** Each user has their own saved chats, so people sharing a browser don't see each other's. */
+  private chatsKey(): string {
+    return CHATS_KEY_PREFIX + (this.user?.email || '').toLowerCase();
+  }
+
+  private loadChats(): Chat[] {
+    if (!this.user) return [];
     try {
-      const v = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-      return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
+      const v = JSON.parse(localStorage.getItem(this.chatsKey()) || '[]');
+      return Array.isArray(v) ? v.filter((c) => c && typeof c.title === 'string' && Array.isArray(c.messages)) : [];
     } catch {
       return [];
     }
   }
 
-  private saveHistory(): void {
-    try {
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(this.history));
-    } catch {}
+  /** Newest first. If browser storage is full, the oldest chats are left out until the rest fit. */
+  private saveChats(): void {
+    if (!this.user) return;
+    const stored = this.chats.map((c) => ({ title: c.title, messages: c.messages.filter((m) => !m.typing).map(storedMsg) }));
+    for (let keep = stored.length; keep >= 0; keep--) {
+      try {
+        localStorage.setItem(this.chatsKey(), JSON.stringify(stored.slice(0, keep)));
+        return;
+      } catch {}
+    }
   }
 
-  /** Most recent first; asking the same question again moves it to the top. */
-  private remember(q: string): void {
-    const key = q.toLowerCase();
-    this.history = [q, ...this.history.filter((h) => h.toLowerCase() !== key)].slice(0, HISTORY_MAX);
-    this.saveHistory();
+  /** Saves the chat on screen and moves it to the top of History, creating it on the first question. */
+  private rememberChat(title: string): void {
+    const chat = this.activeChat || { title, messages: this.messages };
+    this.activeChat = chat;
+    this.chats = [chat, ...this.chats.filter((c) => c !== chat)].slice(0, CHATS_MAX);
+    this.saveChats();
+  }
+
+  private chatWith(m: Msg): Chat | undefined {
+    return this.chats.find((c) => c.messages.includes(m));
+  }
+
+  /** Frees the image previews held by every open chat. */
+  private releaseChats(): void {
+    for (const c of this.chats) for (const m of c.messages) for (const f of m.files || []) if (f.url) URL.revokeObjectURL(f.url);
   }
 
   clearHistory(): void {
-    this.history = [];
-    this.saveHistory();
+    if (!window.confirm('Delete all your saved chats? This can’t be undone.')) return;
+    this.stopSpeaking();
+    this.finishTyping();
+    this.releaseChats();
+    this.chats = [];
+    this.saveChats();
+    this.startEmptyChat();
   }
 
   // --- Attachments ---------------------------------------------------------
@@ -1216,6 +1284,12 @@ function toPng(file: File): Promise<File | null> {
     };
     img.src = src;
   });
+}
+
+/** What's kept of a message in browser storage: no animation state, audio link or image data, only file names. */
+function storedMsg(m: Msg): Msg {
+  const { streaming, typed, status, audioId, files, ...rest } = m;
+  return files?.length ? { ...rest, files: files.map((f) => ({ name: f.name })) } : rest;
 }
 
 function escapeHtml(s: string): string {

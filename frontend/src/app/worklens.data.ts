@@ -184,14 +184,14 @@ export const RELATED: Record<string, string[]> = {
 
 /** Offered before a chat starts, and when nothing in the knowledge base matches. */
 export const STARTER_QUESTIONS = [
-  'How many sick leaves and casual leaves are employees entitled to annually?',
-  'What is the notice period during probation and after confirmation?',
-  'An employee takes sick leave for 4 consecutive days. Is a medical certificate required?'
+  'When do appraisals and hikes happen?',
+  'How does certification reimbursement work?',
+  'What is the referral bonus amount?'
 ];
 
 /** Offered after a greeting. */
 export const GREETING_QUESTIONS = [
-  'What are the eligibility criteria and duration of maternity leave?',
-  'How many employees must participate for team outing reimbursement to be eligible?',
-  'An employee takes sick leave for 4 consecutive days. Is a medical certificate required?'
+  'How many training hours yearly required?',
+  'What is confirmed employee notice period?',
+  'How many sick leaves yearly?'
 ];
